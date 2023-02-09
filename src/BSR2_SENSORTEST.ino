@@ -198,12 +198,11 @@ bool filterData(LidarData d)
   // also runs the linear estimate data
 
   // simple low and high pass filters, will implement smarter filters such as detecting noise and outlier data
-  if (d.quality < 15)
-    return false;
-  if (d.distance < 150)
-    return false;
-  if (d.distance > 6000)
-    return false;
+  if (d.quality < 15 || d.distance < 150 || d.distance > 6000) {
+    pointMemory[(uint8_t)(d.angle * 10)] = 0;
+    return false; 
+  }
+
 
   pointMemory[(uint8_t)(d.angle * 10)] = d.distance;
 
