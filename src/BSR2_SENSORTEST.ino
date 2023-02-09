@@ -1,12 +1,25 @@
 /*
-todo:
-run a test with start bit data and collect input
-improve filter
-test wall angle
-test align with wall
-add wheel rubber
-test move 30cm
-clean up code and remove deprecated stuff
+  TODO:
+    TESTS:
+      run a test with start bit data and collect input
+      test wall angle
+      test align with wall
+      test move 30cm
+      test medkit dispenser and blink
+      test fullscan
+
+
+    CODE:
+      improve filter
+      clean up code and remove deprecated stuff
+      train pi with data
+      convert to ood
+      find implementations for linear estimate
+
+    HARDWARE:
+      add wheel rubber
+      make maze
+      build communication between pi and nano
 
 */
 
@@ -25,6 +38,8 @@ clean up code and remove deprecated stuff
 #define PH1 A1
 #define EN2 A2 // for controlling right
 #define PH2 A3
+
+#define SOLENOID_PIN 12 //for controlling the solenoid trigger
 
 #define MOTOCTL A7
 
@@ -75,6 +90,15 @@ void printText(String s)
   display.setCursor(0, 0);
   display.print(s);
   display.display();
+}
+
+void dispenseMedkit(uint8_t n) {
+  for (uint8_t i = 0; i<n; i++) {
+    digitalWrite(SOLENOID_PIN, HIGH);
+    delay(1000);
+    digitalWrite(SOLENOID_PIN, LOW);
+    delay(1000);
+  }
 }
 
 int16_t readVl(Direction d)
@@ -197,7 +221,7 @@ void calibrateToWall(uint16_t theta1, uint16_t theta2)
 
 bool filterData(LidarData d)
 { // return false if point is tossed, return false if point is accepted
-  // also runs the linear estimate data
+  // not sure when to use the linearestimate
 
   // simple low and high pass filters, will implement smarter filters such as detecting noise and outlier data
   if (d.quality < 15 || d.distance < 150 || d.distance > 6000)
@@ -208,7 +232,7 @@ bool filterData(LidarData d)
 
   pointMemory[(uint8_t)(d.angle * 10)] = d.distance;
 
-  // update currentpoint struct
+  // update currentpoint struct definetly could optimise with references
   currentPoint.angle = d.angle;
   currentPoint.distance = d.distance;
   currentPoint.quality = d.quality;
@@ -217,7 +241,7 @@ bool filterData(LidarData d)
   return true;
 }
 
-void linearEstimate(uint8_t a, uint8_t b)
+void linearEstimate(uint16_t a, uint16_t b)
 { // angle a * 10, angle b * 10
   // only run if the distance between the two points are low
   // estimate all points between the two angles to fill in all blank spots between angles
@@ -417,6 +441,8 @@ void setup()
   pinMode(PH1, OUTPUT);
   pinMode(EN2, OUTPUT);
   pinMode(PH2, OUTPUT);
+
+  pinMode(SOLENOID_PIN, OUTPUT);
 
   Serial.begin(9600);
   lidar.begin(Serial1);
