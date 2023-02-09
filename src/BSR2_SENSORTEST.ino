@@ -180,7 +180,7 @@ uint8_t angleToWall(uint16_t theta1, uint16_t theta2)
 void calibrateToWall(uint16_t theta1, uint16_t theta2)
 {
   // will adjust robot position to be as parellel to wall whichever angle is closer, 0 or 90
-  uint8_t m = angleToWall(theta1, theta2);
+  int8_t m = angleToWall(theta1, theta2);
   if (m > 45)
   {
     while (m < 90)
@@ -305,8 +305,8 @@ void stop()
 
 uint32_t averageDistance(uint16_t theta1, uint16_t theta2)
 {
-  uint32_t r;
-  uint16_t n;
+  uint32_t r = 0;
+  uint16_t n = 0;
   for (uint16_t i = theta1; i < theta2; i++)
   {
     if (pointMemory[i] == 0)
