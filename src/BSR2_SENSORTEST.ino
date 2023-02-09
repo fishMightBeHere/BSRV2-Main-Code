@@ -5,11 +5,11 @@ improve filter
 test wall angle
 test align with wall
 add wheel rubber
-run 
-tphynsth
+test move 30cm
+clean up code and remove deprecated stuff
 
-P
 */
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -127,7 +127,7 @@ void fullScan()
 
 uint8_t angleToWall(uint16_t theta1, uint16_t theta2)
 { // should return angle relative to east returns -90 to 90 deg
-  //update lidar
+  // update lidar
   fullScan();
 
   uint32_t sum_x = 0;
@@ -184,8 +184,10 @@ void calibrateToWall(uint16_t theta1, uint16_t theta2)
       m = angleToWall(theta1, theta2);
     }
   }
-  else if (m < -45) {
-    while (m<-90) {
+  else if (m < -45)
+  {
+    while (m < -90)
+    {
       rightMotors(1, Direction::BACK);
       leftMotors(1, Direction::FRONT);
       m = angleToWall(theta1, theta2);
@@ -198,20 +200,20 @@ bool filterData(LidarData d)
   // also runs the linear estimate data
 
   // simple low and high pass filters, will implement smarter filters such as detecting noise and outlier data
-  if (d.quality < 15 || d.distance < 150 || d.distance > 6000) {
+  if (d.quality < 15 || d.distance < 150 || d.distance > 6000)
+  {
     pointMemory[(uint8_t)(d.angle * 10)] = 0;
-    return false; 
+    return false;
   }
-
 
   pointMemory[(uint8_t)(d.angle * 10)] = d.distance;
 
-  //update currentpoint struct
+  // update currentpoint struct
   currentPoint.angle = d.angle;
   currentPoint.distance = d.distance;
   currentPoint.quality = d.quality;
   currentPoint.startBit = d.startBit;
-  
+
   return true;
 }
 
@@ -251,7 +253,7 @@ void readLidar()
   }
   else
   {
-    printText("lidar is struggling");
+    printText(F("lidar is struggling"));
 
     analogWrite(MOTOCTL, 0); // stop the rplidar motor
 
@@ -277,28 +279,33 @@ void stop()
   digitalWrite(PH2, LOW);
 }
 
-uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
+uint32_t averageDistance(uint16_t theta1, uint16_t theta2)
+{
   uint32_t r;
   uint16_t n;
-  for (uint16_t i = theta1; i<theta2; i++) {
-    if (pointMemory[i] == 0) {
+  for (uint16_t i = theta1; i < theta2; i++)
+  {
+    if (pointMemory[i] == 0)
+    {
       continue;
     }
     n++;
-    r+=pointMemory[i];
+    r += pointMemory[i];
   }
 
-  return r/n;
+  return r / n;
 }
 
-void travel30cm() {
-  //this method could be important
-  //also need logic to determine which area to scan from, front or back. possibly keep track of distance change in both directions
+void travel30cm()
+{
+  // this method could be important
+  // also need logic to determine which area to scan from, front or back. possibly keep track of distance change in both directions
   fullScan();
-  uint16_t di = averageDistance(75,105); //because these are the degrees of north i think
-  while(averageDistance(75,105)-di < 300) {
-    rightMotors(1,Direction::FRONT);
-    leftMotors(1,Direction::FRONT);
+  uint16_t di = averageDistance(75, 105); // because these are the degrees of north i think
+  while (averageDistance(75, 105) - di < 300)
+  {
+    rightMotors(1, Direction::FRONT);
+    leftMotors(1, Direction::FRONT);
   }
   stop();
 }
@@ -420,10 +427,7 @@ void setup()
 
 void loop()
 {
-  rightMotors(100, Direction::FRONT);
-  leftMotors(100, Direction::BACK);
-  delay(1000);
-  rightMotors(100, Direction::BACK);
-  leftMotors(100, Direction::FRONT);
-  delay(1000);
+  readLidar();
+  // setup for raw data with startbit
+  Serial.println(String(currentPoint.angle) + " " + String(currentPoint.distance) + " " + String(currentPoint.quality) + " " + String(currentPoint.startBit));
 }
