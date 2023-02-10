@@ -15,6 +15,7 @@
       train pi with data
       convert to ood
       find implementations for linear estimate
+      create a function that can detect intersections and angles, we need this to know the input theta values for align to wall
 
     HARDWARE:
       add wheel rubber
@@ -39,7 +40,7 @@
 #define EN2 A2 // for controlling right
 #define PH2 A3
 
-#define SOLENOID_PIN 12 //for controlling the solenoid trigger
+#define SOLENOID_PIN 12 // for controlling the solenoid trigger
 
 #define MOTOCTL A7
 
@@ -92,8 +93,10 @@ void printText(String s)
   display.display();
 }
 
-void dispenseMedkit(uint8_t n) {
-  for (uint8_t i = 0; i<n; i++) {
+void dispenseMedkit(uint8_t n)
+{
+  for (uint8_t i = 0; i < n; i++)
+  {
     digitalWrite(SOLENOID_PIN, HIGH);
     delay(1000);
     digitalWrite(SOLENOID_PIN, LOW);
