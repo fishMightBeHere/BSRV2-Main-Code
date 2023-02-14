@@ -7,7 +7,7 @@
       test move 30cm
       test medkit dispenser and blink
       test fullscan
-
+      test out data but at lower scan speeds 
 
     CODE:
       improve filter
@@ -152,7 +152,7 @@ void fullScan()
   }
 }
 
-uint8_t angleToWall(uint16_t theta1, uint16_t theta2)
+uint16_t angleToWall(uint16_t theta1, uint16_t theta2)
 { // should return angle relative to east returns -90 to 90 deg
   // update lidar
   fullScan();
@@ -162,7 +162,7 @@ uint8_t angleToWall(uint16_t theta1, uint16_t theta2)
   uint32_t sum_x2 = 0;
   uint32_t sum_y2 = 0;
   uint32_t sum_xy = 0;
-  uint8_t n = 0;
+  uint16_t n = 0;
 
   for (uint16_t i = theta1; i < theta1 - theta2; i++)
   {
@@ -175,8 +175,8 @@ uint8_t angleToWall(uint16_t theta1, uint16_t theta2)
     sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
     sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
   }
-  uint8_t y = n * sum_xy - sum_x * sum_y;
-  uint8_t x = n * sum_x2 - sum_x * sum_x; // need checking to prevent x == 0;
+  uint16_t y = n * sum_xy - sum_x * sum_y;
+  uint16_t x = n * sum_x2 - sum_x * sum_x; // need checking to prevent x == 0;
   return atan2(y, x) * RAD_TO_DEG;
 }
 
@@ -229,11 +229,11 @@ bool filterData(LidarData d)
   // simple low and high pass filters, will implement smarter filters such as detecting noise and outlier data
   if (d.quality < 15 || d.distance < 150 || d.distance > 6000)
   {
-    pointMemory[(uint8_t)(d.angle * 10)] = 0;
+    pointMemory[(uint16_t)(d.angle * 10)] = 0;
     return false;
   }
 
-  pointMemory[(uint8_t)(d.angle * 10)] = d.distance;
+  pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
 
   // update currentpoint struct definetly could optimise with references
   currentPoint.angle = d.angle;
@@ -260,7 +260,7 @@ void linearEstimate(uint16_t a, uint16_t b)
 
   float slope = y1 - (m * x1);
 
-  for (uint8_t i = a; i < b; i++)
+  for (uint16_t i = a; i < b; i++)
   {
     pointMemory[i] = slope / (sin(DEG_TO_RAD * (i / 10)) - slope * cos(DEG_TO_RAD * i / 10));
   }
@@ -292,7 +292,7 @@ void readLidar()
       lidar.startScan();
 
       // start motor rotating at max allowed speed
-      analogWrite(MOTOCTL, 255);
+      analogWrite(MOTOCTL, 127);
       delay(1000);
     }
   }
@@ -451,7 +451,7 @@ void setup()
   lidar.begin(Serial1);
 
   pinMode(MOTOCTL, OUTPUT);
-  analogWrite(MOTOCTL, 255);
+  analogWrite(MOTOCTL, 127);
 }
 
 void loop()
