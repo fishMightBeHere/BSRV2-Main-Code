@@ -36,8 +36,7 @@
 
 #include "Adafruit_TSL2561_U.h"
 
-#define SCREEN_ADDRESS \
-    0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 #define EN1 A0  // for controlling left
 #define PH1 A1
@@ -157,16 +156,12 @@ uint16_t angleToWall(uint16_t theta1,
         n++;
         sum_x += pointMemory[i] * cos((i / 10) * DEG_TO_RAD);
         sum_y += pointMemory[i] * sin((i / 10) * DEG_TO_RAD);
-        sum_x2 += (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) *
-                  (pointMemory[i] * cos((i / 10) * DEG_TO_RAD));
-        sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) *
-                  (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
-        sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) *
-                              (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
+        sum_x2 += (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * cos((i / 10) * DEG_TO_RAD));
+        sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
+        sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
     }
     uint16_t y = n * sum_xy - sum_x * sum_y;
-    uint16_t x =
-        n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
+    uint16_t x = n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
     return atan2(y, x) * RAD_TO_DEG;
 }
 
@@ -201,10 +196,8 @@ void calibrateToWall(uint16_t theta1, uint16_t theta2) {
     }
 }
 
-bool filterData(LidarData d) {  // return false if point is tossed, return false
-                                // if point is accepted
+bool filterData(LidarData d) {  // return false if point is tossed, return false if point is accepted
     // not sure when to use the linearestimate
-
     // simple low and high pass filters, will implement smarter filters such as
     // detecting noise and outlier data
     if (d.quality < 15 || d.distance < 150 || d.distance > 6000) {
@@ -240,8 +233,7 @@ void linearEstimate(uint16_t a, uint16_t b) {  // angle a * 10, angle b * 10
     float slope = y1 - (m * x1);
 
     for (uint16_t i = a; i < b; i++) {
-        pointMemory[i] = slope / (sin(DEG_TO_RAD * (i / 10)) -
-                                  slope * cos(DEG_TO_RAD * i / 10));
+        pointMemory[i] = slope / (sin(DEG_TO_RAD * (i / 10)) - slope * cos(DEG_TO_RAD * i / 10));
     }
 }
 
@@ -250,8 +242,7 @@ void readLidar() {
         LidarData d;
         d.distance = lidar.getCurrentPoint().distance;  // in mm
         d.angle = lidar.getCurrentPoint().angle;        // in deg
-        d.startBit = lidar.getCurrentPoint()
-                         .startBit;  // wheter point belongs to new scan
+        d.startBit = lidar.getCurrentPoint().startBit;  // wheter point belongs to new scan
         d.quality = lidar.getCurrentPoint().quality;  // quality of measurement
 
         filterData(d);
@@ -432,7 +423,5 @@ void setup() {
 void loop() {
     readLidar();
     // setup for raw data with startbit
-    Serial.println(
-        String(currentPoint.angle) + " " + String(currentPoint.distance) + " " +
-        String(currentPoint.quality) + " " + String(currentPoint.startBit));
+    Serial.println(String(currentPoint.angle) + " " + String(currentPoint.distance) + " " + String(currentPoint.quality) + " " + String(currentPoint.startBit));
 }
