@@ -32,6 +32,7 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_VL6180X.h>
 #include "Adafruit_TSL2561_U.h"
+#include <RunningMedian.h>
 
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
@@ -323,10 +324,24 @@ uint32_t averageDistance(uint16_t theta1, uint16_t theta2)
   return r / n;
 }
 
+uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
+  //the idea of this function is to find the distance from the theta inbetween theta1 and 2
+  //being a median, this will be more noise resistant 
+  
+  RunningMedian r = RunningMedian(theta2-theta1);
+  r.setSearchMode(1); //set as binary search mode to help with performance
+  for (uint16_t i = theta1; i < theta2; i++) {
+    r.add(pointMemory[i]);
+  }
+
+  return r.getMedian();
+}
+
 void travel30cm()
 {
   // this method could be important
   // also need logic to determine which area to scan from, front or back. possibly keep track of distance change in both directions
+  // average distance should add some level of noiseproofing to measurements, we could use median to be even more resistant to outliers
   fullScan();
   uint16_t di = averageDistance(75, 105); // because these are the degrees of north i think
   while (averageDistance(75, 105) - di < 300)
