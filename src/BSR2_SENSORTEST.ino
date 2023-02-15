@@ -8,6 +8,7 @@
       test medkit dispenser and blink
       test fullscan
       test out data but at lower scan speeds
+      test median calculator
 
     CODE:
       improve filter
@@ -18,6 +19,8 @@
       create a function that can detect intersections and angles, we need this
   to know the input theta values for align to wall test NextGenAHRS library test
   curvefitting library
+
+    extend library for rplidar to add more features
 
     HARDWARE:
       add wheel rubber
@@ -36,7 +39,8 @@
 
 #include "Adafruit_TSL2561_U.h"
 
-#define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define SCREEN_ADDRESS \
+  0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
 #define EN1 A0  // for controlling left
 #define PH1 A1
@@ -49,12 +53,19 @@
 
 float pointMemory[3600];
 
-RPLidar lidar;
+class RPLidarExtension : public RPLidar {
+  RPLidar lidar;
+  public:
+    RPLidarExtension() {
+
+    }
+};
+
 struct LidarData {
-    float distance;
-    float angle;
-    bool startBit;
-    byte quality;
+  float distance;
+  float angle;
+  bool startBit;
+  byte quality;
 };
 
 LidarData currentPoint;
@@ -73,74 +84,77 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 enum Direction { FRONT, RIGHT, LEFT, BACK };
 
-void TCA(uint8_t bus) {
+class Robot {
+  RPLidarExtension lidar;
+
+ private:
+  void TCA(uint8_t bus) {
     Wire.beginTransmission(0x70);
     Wire.write(1 << bus);
     Wire.endTransmission();
-}
+  }
 
-void printText(String s) {
+  void printText(String s) {
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0, 0);
     display.print(s);
     display.display();
-}
+  }
 
-void dispenseMedkit(uint8_t n) {
+  void dispenseMedkit(uint8_t n) {
     for (uint8_t i = 0; i < n; i++) {
-        digitalWrite(SOLENOID_PIN, HIGH);
-        delay(1000);
-        digitalWrite(SOLENOID_PIN, LOW);
-        delay(1000);
+      digitalWrite(SOLENOID_PIN, HIGH);
+      delay(1000);
+      digitalWrite(SOLENOID_PIN, LOW);
+      delay(1000);
     }
-}
+  }
 
-int16_t readVl(Direction d) {
+  int16_t readVl(Direction d) {
     switch (d) {
-        case FRONT:
-            TCA(3);
-            return tofFront.readRange();  // might need to wrap error checking
-            break;
-        case RIGHT:
-            TCA(2);
-            return tofRight.readRange();
-            break;
-        case BACK:
-            TCA(1);
-            return tofBack.readRange();
-            break;
-        case LEFT:
-            TCA(0);
-            return tofLeft.readRange();
-            break;
+      case FRONT:
+        TCA(3);
+        return tofFront.readRange();  // might need to wrap error checking
+        break;
+      case RIGHT:
+        TCA(2);
+        return tofRight.readRange();
+        break;
+      case BACK:
+        TCA(1);
+        return tofBack.readRange();
+        break;
+      case LEFT:
+        TCA(0);
+        return tofLeft.readRange();
+        break;
     }
     return -1;
-}
+  }
 
-int8_t readTSL() {
+  int8_t readTSL() {
     sensors_event_t event;
     luxSensor.getEvent(&event);
     if (event.light == 0) {
-        display.clearDisplay();
-        printText(F("luxSensor overload too bright"));
-        return -1;
+      display.clearDisplay();
+      printText(F("luxSensor overload too bright"));
+      return -1;
     } else
-        return event.light;
-}
+      return event.light;
+  }
 
-void fullScan() {
+  void fullScan() {
     // does a full scan of 360 degs
     // should ignore first start bit to ensure a full rotation until the next
     while (currentPoint.startBit) {
-        readLidar();
+      readLidar();
     }
-}
+  }
 
-uint16_t angleToWall(uint16_t theta1,
-                     uint16_t theta2) {  // should return angle relative to east
-                                         // returns -90 to 90 deg
+  uint16_t angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
+    // returns -90 to 90 deg
     // update lidar
     fullScan();
 
@@ -152,57 +166,62 @@ uint16_t angleToWall(uint16_t theta1,
     uint16_t n = 0;
 
     for (uint16_t i = theta1; i < theta1 - theta2; i++) {
-        if (pointMemory[i] == 0) continue;
-        n++;
-        sum_x += pointMemory[i] * cos((i / 10) * DEG_TO_RAD);
-        sum_y += pointMemory[i] * sin((i / 10) * DEG_TO_RAD);
-        sum_x2 += (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * cos((i / 10) * DEG_TO_RAD));
-        sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
-        sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
+      if (pointMemory[i] == 0) continue;
+      n++;
+      sum_x += pointMemory[i] * cos((i / 10) * DEG_TO_RAD);
+      sum_y += pointMemory[i] * sin((i / 10) * DEG_TO_RAD);
+      sum_x2 += (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) *
+                (pointMemory[i] * cos((i / 10) * DEG_TO_RAD));
+      sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) *
+                (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
+      sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) *
+                            (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
     }
     uint16_t y = n * sum_xy - sum_x * sum_y;
-    uint16_t x = n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
+    uint16_t x =
+        n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
     return atan2(y, x) * RAD_TO_DEG;
-}
+  }
 
-void calibrateToWall(uint16_t theta1, uint16_t theta2) {
+  void calibrateToWall(uint16_t theta1, uint16_t theta2) {
     // will adjust robot position to be as parellel to wall whichever angle is
     // closer, 0 or 90
     int8_t m = angleToWall(theta1, theta2);
     if (m > 45) {
-        while (m < 90) {
-            rightMotors(1, Direction::FRONT);
-            leftMotors(1, Direction::BACK);
-            m = angleToWall(theta1, theta2);
-        }
+      while (m < 90) {
+        rightMotors(1, Direction::FRONT);
+        leftMotors(1, Direction::BACK);
+        m = angleToWall(theta1, theta2);
+      }
     } else if (m <= 45 && m > 0) {
-        while (m >= 0) {
-            rightMotors(1, Direction::BACK);
-            leftMotors(1, Direction::FRONT);
-            m = angleToWall(theta1, theta2);
-        }
+      while (m >= 0) {
+        rightMotors(1, Direction::BACK);
+        leftMotors(1, Direction::FRONT);
+        m = angleToWall(theta1, theta2);
+      }
     } else if (m > -45 && m <= 0) {
-        while (m < 0) {
-            rightMotors(1, Direction::FRONT);
-            leftMotors(1, Direction::BACK);
-            m = angleToWall(theta1, theta2);
-        }
+      while (m < 0) {
+        rightMotors(1, Direction::FRONT);
+        leftMotors(1, Direction::BACK);
+        m = angleToWall(theta1, theta2);
+      }
     } else if (m < -45) {
-        while (m < -90) {
-            rightMotors(1, Direction::BACK);
-            leftMotors(1, Direction::FRONT);
-            m = angleToWall(theta1, theta2);
-        }
+      while (m < -90) {
+        rightMotors(1, Direction::BACK);
+        leftMotors(1, Direction::FRONT);
+        m = angleToWall(theta1, theta2);
+      }
     }
-}
+  }
 
-bool filterData(LidarData d) {  // return false if point is tossed, return false if point is accepted
+  bool filterData(LidarData d) {  // return false if point is tossed, return
+                                  // false if point is accepted
     // not sure when to use the linearestimate
     // simple low and high pass filters, will implement smarter filters such as
     // detecting noise and outlier data
     if (d.quality < 15 || d.distance < 150 || d.distance > 6000) {
-        pointMemory[(uint16_t)(d.angle * 10)] = 0;
-        return false;
+      pointMemory[(uint16_t)(d.angle * 10)] = 0;
+      return false;
     }
 
     pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
@@ -214,9 +233,9 @@ bool filterData(LidarData d) {  // return false if point is tossed, return false
     currentPoint.startBit = d.startBit;
 
     return true;
-}
+  }
 
-void linearEstimate(uint16_t a, uint16_t b) {  // angle a * 10, angle b * 10
+  void linearEstimate(uint16_t a, uint16_t b) {  // angle a * 10, angle b * 10
     // only run if the distance between the two points are low
     // estimate all points between the two angles to fill in all blank spots
     // between angles could use the least square aproximation to estimatepoints,
@@ -233,74 +252,76 @@ void linearEstimate(uint16_t a, uint16_t b) {  // angle a * 10, angle b * 10
     float slope = y1 - (m * x1);
 
     for (uint16_t i = a; i < b; i++) {
-        pointMemory[i] = slope / (sin(DEG_TO_RAD * (i / 10)) - slope * cos(DEG_TO_RAD * i / 10));
+      pointMemory[i] = slope / (sin(DEG_TO_RAD * (i / 10)) -
+                                slope * cos(DEG_TO_RAD * i / 10));
     }
-}
+  }
 
-void readLidar() {
+  void readLidar() {
     if (IS_OK(lidar.waitPoint())) {
-        LidarData d;
-        d.distance = lidar.getCurrentPoint().distance;  // in mm
-        d.angle = lidar.getCurrentPoint().angle;        // in deg
-        d.startBit = lidar.getCurrentPoint().startBit;  // wheter point belongs to new scan
-        d.quality = lidar.getCurrentPoint().quality;  // quality of measurement
+      LidarData d;
+      d.distance = lidar.getCurrentPoint().distance;  // in mm
+      d.angle = lidar.getCurrentPoint().angle;        // in deg
+      d.startBit =
+          lidar.getCurrentPoint().startBit;  // wheter point belongs to new scan
+      d.quality = lidar.getCurrentPoint().quality;  // quality of measurement
 
-        filterData(d);
+      filterData(d);
     } else {
-        printText(F("lidar is struggling"));
+      printText(F("lidar is struggling"));
 
-        analogWrite(MOTOCTL, 0);  // stop the rplidar motor
+      analogWrite(MOTOCTL, 0);  // stop the rplidar motor
 
-        // try to detect RPLIDAR...
-        rplidar_response_device_info_t info;
-        if (IS_OK(lidar.getDeviceInfo(info, 100))) {
-            // detected...
-            lidar.startScan();
+      // try to detect RPLIDAR...
+      rplidar_response_device_info_t info;
+      if (IS_OK(lidar.getDeviceInfo(info, 100))) {
+        // detected...
+        lidar.startScan();
 
-            // start motor rotating at max allowed speed
-            analogWrite(MOTOCTL, 127);
-            delay(1000);
-        }
+        // start motor rotating at max allowed speed
+        analogWrite(MOTOCTL, 127);
+        delay(1000);
+      }
     }
-}
+  }
 
-void stop() {
+  void stop() {
     rightMotorSpeed = 0;
     leftMotorSpeed = 0;
     analogWrite(EN1, 0);
     digitalWrite(PH1, HIGH);
     analogWrite(EN2, 0);
     digitalWrite(PH2, LOW);
-}
+  }
 
-uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
+  uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
     uint32_t r = 0;
     uint16_t n = 0;
     for (uint16_t i = theta1; i < theta2; i++) {
-        if (pointMemory[i] == 0) {
-            continue;
-        }
-        n++;
-        r += pointMemory[i];
+      if (pointMemory[i] == 0) {
+        continue;
+      }
+      n++;
+      r += pointMemory[i];
     }
 
     return r / n;
-}
+  }
 
-uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
+  uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
     // the idea of this function is to find the distance from the theta
     // inbetween theta1 and 2 being a median, this will be more noise resistant
 
     RunningMedian r = RunningMedian(theta2 - theta1);
     r.setSearchMode(1);  // set as binary search mode to help with performance
     for (uint16_t i = theta1; i < theta2; i++) {
-        r.add(pointMemory[i]);
+      r.add(pointMemory[i]);
     }
 
     return r.getMedian();
-}
+  }
 
-void travel30cm() {
+  void travel30cm() {
     // this method could be important
     // also need logic to determine which area to scan from, front or back.
     // possibly keep track of distance change in both directions average
@@ -310,53 +331,58 @@ void travel30cm() {
     uint16_t di = averageDistance(
         75, 105);  // because these are the degrees of north i think
     while (averageDistance(75, 105) - di < 300) {
-        rightMotors(1, Direction::FRONT);
-        leftMotors(1, Direction::FRONT);
+      rightMotors(1, Direction::FRONT);
+      leftMotors(1, Direction::FRONT);
     }
     stop();
-}
+  }
 
-void rightMotors(uint8_t speed, Direction d) {
+  void rightMotors(uint8_t speed, Direction d) {
     rightMotorSpeed = speed;
     switch (d) {
-        case FRONT:
-            analogWrite(EN1, speed);
-            digitalWrite(PH1, HIGH);
-            break;
-        case BACK:
-            analogWrite(EN1, speed);
-            digitalWrite(PH1, LOW);
-            break;
-        default:
-            stop();
-            break;
+      case FRONT:
+        analogWrite(EN1, speed);
+        digitalWrite(PH1, HIGH);
+        break;
+      case BACK:
+        analogWrite(EN1, speed);
+        digitalWrite(PH1, LOW);
+        break;
+      default:
+        stop();
+        break;
     }
-}
+  }
 
-void leftMotors(uint8_t speed, Direction d) {
+  void leftMotors(uint8_t speed, Direction d) {
     leftMotorSpeed = speed;
     switch (d) {
-        case FRONT:
-            analogWrite(EN2, speed);
-            digitalWrite(PH2, HIGH);
-            break;
-        case BACK:
-            analogWrite(EN2, speed);
-            digitalWrite(PH2, LOW);
-            break;
-        default:
-            stop();
-            break;
+      case FRONT:
+        analogWrite(EN2, speed);
+        digitalWrite(PH2, HIGH);
+        break;
+      case BACK:
+        analogWrite(EN2, speed);
+        digitalWrite(PH2, LOW);
+        break;
+      default:
+        stop();
+        break;
     }
-}
+  }
 
-void setup() {
+ public:
+  Robot() {
+
+    startup();
+  }
+  void startup() {
     pinMode(LED_BUILTIN, OUTPUT);
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        digitalWrite(LED_BUILTIN, HIGH);
-        while (1)
-            ;
+      digitalWrite(LED_BUILTIN, HIGH);
+      while (1)
+        ;
     }
 
     display.display();
@@ -370,39 +396,39 @@ void setup() {
     // start the tofs
     TCA(0);
     if (!tofLeft.begin()) {
-        printText(F("tofLeft failed"));
-        while (1)
-            ;
+      printText(F("tofLeft failed"));
+      while (1)
+        ;
     }
     printText(F("tofLeft ok"));
     TCA(1);
     if (!tofBack.begin()) {
-        printText(F("tofback failed"));
-        while (1)
-            ;
+      printText(F("tofback failed"));
+      while (1)
+        ;
     }
     printText(F("tofBack ok"));
     TCA(2);
     if (!tofRight.begin()) {
-        printText(F("tofRight failed"));
-        while (1)
-            ;
+      printText(F("tofRight failed"));
+      while (1)
+        ;
     }
     printText(F("tofRight ok"));
     TCA(3);
     if (!tofFront.begin()) {
-        printText(F("tofFront failed"));
-        while (1)
-            ;
+      printText(F("tofFront failed"));
+      while (1)
+        ;
     }
     printText(F("tofFront ok"));
 
     // starting lux sensor
     TCA(4);
     if (!luxSensor.begin()) {
-        printText(F("luxsensor failed"));
-        while (1)
-            ;
+      printText(F("luxsensor failed"));
+      while (1)
+        ;
     }
     printText(F("luxSensor ok"));
 
@@ -416,12 +442,19 @@ void setup() {
     Serial.begin(9600);
     lidar.begin(Serial1);
 
+    rplidar_response_device_info_t response;
+    Serial.print("DeviceInfo :");
+    Serial.println(lidar.getDeviceInfo(response));
+
     pinMode(MOTOCTL, OUTPUT);
     analogWrite(MOTOCTL, 127);
+  }
+};
+
+Robot robot;
+
+void setup() { 
+   
 }
 
-void loop() {
-    readLidar();
-    // setup for raw data with startbit
-    Serial.println(String(currentPoint.angle) + " " + String(currentPoint.distance) + " " + String(currentPoint.quality) + " " + String(currentPoint.startBit));
-}
+void loop() {}
