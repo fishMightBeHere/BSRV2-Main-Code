@@ -1,7 +1,6 @@
 /*
   TODO:
     TESTS:
-      run a test with start bit data and collect input
       test wall angle
       test align with wall
       test move 30cm
@@ -9,6 +8,7 @@
       test fullscan
       test out data but at lower scan speeds
       test median calculator
+      live memory performance testing
 
     CODE:
       improve filter
@@ -19,7 +19,7 @@
   to know the input theta values for align to wall test NextGenAHRS library test
   curvefitting library
 
-    extend library for rplidar to add more features
+      reduce floating point math to reduce errer, might be overkill
 
     HARDWARE:
       add wheel rubber
@@ -77,6 +77,10 @@ class Robot {
     RPLidar lidar;
 
    private:
+    const uint8_t s = 30;  // standard error change this solution sucks for encapsulation
+    uint16_t e = 0;        // error
+    uint16_t previousAngle = 0;
+
     void TCA(uint8_t bus) {
         Wire.beginTransmission(0x70);
         Wire.write(1 << bus);
@@ -135,15 +139,20 @@ class Robot {
     }
 
     void fullScan() {
-        // does a full scan of 360 degs
-        // should ignore first start bit to ensure a full rotation until the next-
-        // does not work based on start bit, attempt to use angle comparisons or find a way to work around updating a full 360 deg rotation
-        while (currentPoint.startBit) {
-            readLidar();
+        // does a full scan of the first 360 accepted points
+        // does not work based on start bit due to start bit not necessarily indicating a new rotation
+        
+        // this will run until we accept 360 points
+        uint16_t sucsess = 0;
+        while (sucsess < 360) {  
+            if (readLidar()) {
+                sucsess++;
+            }
         }
     }
 
     uint16_t angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
+        // to update with line fitting library.
         // returns -90 to 90 deg
         // update lidar
         fullScan();
@@ -200,33 +209,43 @@ class Robot {
         }
     }
 
-    bool filterData(LidarData d) {  // return false if point is tossed, return
-                                    // false if point is accepted
-        // not sure when to use the linearestimate
-        // simple low and high pass filters, will implement smarter filters such as
-        // detecting noise and outlier data
-
-        //filter out data with theta values too far apart, need to find a way to recover from skipped points 
-        //skipped points could be accounted for with an extra "error" angle that will increase the bounds if a point is skipped, only problem is that this assumes point angles are even distributed
-
-        // update currentpoint struct definetly could optimise with references
-        currentPoint.angle = d.angle;
-        currentPoint.distance = d.distance;
-        currentPoint.quality = d.quality;
-        currentPoint.startBit = d.startBit;
-
-        if (d.quality < 15 || d.distance < 150 || d.distance > 6000 || d.angle >= 360) {
-            if (d.angle < 360) {
-                pointMemory[(uint16_t)(d.angle * 10)] = 0;
-            }
-            return false;
+    float angleDistance(float theta1, float theta2) {
+        //calculate distance between two angles
+        if (theta2 < theta1) {  // this happens when t2 is like 10, but t2 is about 350
+            return (theta2 + 360) - theta1;
         }
-
-        pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
-        return true;
+        return (theta2 - theta1);
     }
 
-    void linearEstimate(uint16_t a, uint16_t b) {  // angle a * 10, angle b * 10
+    bool filterData(LidarData d) {  // return false if point is tossed, return
+                                    // false if point is accepted
+        // simple low and high pass filters, will implement smarter filters such as detecting noise and outlier data
+
+        // filters, block:
+        // distance less than 150
+        // distance greater than 6000
+        // angles between 123 and 125
+        // distances between 3900 and 4100
+        // filter out qualities that are not 15
+        // filter out changes in angle that are greater than s deg
+
+        // i realize that this will not work without some dumb variable scope magic
+
+        if (d.quality == 15 && d.distance < 6000 && d.distance > 150 && (d.distance < 3900 || d.distance > 4100) && (d.angle < 123 || d.angle > 125)) {
+            if (d.angle < 360 && angleDistance(previousAngle, d.angle) < s + e) {  // make sure that the angle can never be above 360 or else program dies
+                pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
+                return true;
+            } else
+                e += s;
+        } else
+            e += s;
+
+        pointMemory[(uint16_t)(d.angle * 10)] = 0;
+        return false;
+    }
+
+    void linearEstimate(uint16_t a, uint16_t b) {  //currently unused method
+        // angle a * 10, angle b * 10
         // only run if the distance between the two points are low
         // estimate all points between the two angles to fill in all blank spots
         // between angles could use the least square aproximation to estimatepoints,
@@ -247,7 +266,7 @@ class Robot {
         }
     }
 
-    void readLidar() {
+    boolean readLidar() {
         if (IS_OK(lidar.waitPoint())) {
             LidarData d;
             d.distance = lidar.getCurrentPoint().distance;  // in mm
@@ -255,7 +274,7 @@ class Robot {
             d.startBit = lidar.getCurrentPoint().startBit;  // wheter point belongs to new scan
             d.quality = lidar.getCurrentPoint().quality;    // quality of measurement
 
-            filterData(d);
+            return filterData(d);
         } else {
             printText(F("lidar is struggling"));
 
@@ -272,6 +291,7 @@ class Robot {
                 delay(1000);
             }
         }
+        return false;
     }
 
     void stop() {
@@ -316,11 +336,14 @@ class Robot {
         // possibly keep track of distance change in both directions average
         // distance should add some level of noiseproofing to measurements, we could
         // use median to be even more resistant to outliers
+
+        // this probably is very slow and inefficient 
         fullScan();
         uint16_t di = averageDistance(75, 105);  // because these are the degrees of north i think
-        while (averageDistance(75, 105) - di < 300) {
+        while (medianDistance(75, 105) - di < 300) {
             rightMotors(1, Direction::FRONT);
             leftMotors(1, Direction::FRONT);
+            fullScan();
         }
         stop();
     }
