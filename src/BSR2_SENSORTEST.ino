@@ -144,7 +144,7 @@ class Robot {
         
         // this will run until we accept 360 points
         uint16_t sucsess = 0;
-        while (sucsess < 360) {  
+        while (sucsess < 1000) {  
             if (readLidar()) {
                 sucsess++;
             }
@@ -287,7 +287,7 @@ class Robot {
                 lidar.startScan();
 
                 // start motor rotating at max allowed speed
-                analogWrite(MOTOCTL, 100);
+                analogWrite(MOTOCTL, 255);
                 delay(1000);
             }
         }
@@ -451,12 +451,20 @@ class Robot {
         lidar.begin(Serial1);
 
         pinMode(MOTOCTL, OUTPUT);
-        analogWrite(MOTOCTL, 100);
+        analogWrite(MOTOCTL, 255);
     }
 
     void printCurrentPoint() {
         readLidar();
         Serial.println(String(currentPoint.angle) + " " + String(currentPoint.distance) + " " + String(currentPoint.quality) + " " + String(currentPoint.startBit));
+    }
+
+    void exportLidarData() {
+        fullScan();
+        for (uint16_t i = 0; i < 3600; i++) {
+            Serial.println(String((float)i/10) + " " + String(pointMemory[i]));
+        }
+        Serial.println("\n\n\n");
     }
 };
 
@@ -464,4 +472,4 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() { robot.printCurrentPoint(); }
+void loop() { robot.exportLidarData(); }
