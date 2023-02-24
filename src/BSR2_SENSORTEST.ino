@@ -138,13 +138,16 @@ class Robot {
             return event.light;
     }
 
-    void fullScan() {
-        // does a full scan of the first 360 accepted points
+    void fullScan(uint16_t n) {
+        // does a full scan of the first n accepted points
         // does not work based on start bit due to start bit not necessarily indicating a new rotation
-        
+
         // this will run until we accept 360 points
+
+        //clear current pointcloud
+        memset(pointMemory,0,3600);
         uint16_t sucsess = 0;
-        while (sucsess < 1000) {  
+        while (sucsess < n) {
             if (readLidar()) {
                 sucsess++;
             }
@@ -155,7 +158,7 @@ class Robot {
         // to update with line fitting library.
         // returns -90 to 90 deg
         // update lidar
-        fullScan();
+        fullScan(400);
 
         uint32_t sum_x = 0;
         uint32_t sum_y = 0;
@@ -210,7 +213,7 @@ class Robot {
     }
 
     float angleDistance(float theta1, float theta2) {
-        //calculate distance between two angles
+        // calculate distance between two angles
         if (theta2 < theta1) {  // this happens when t2 is like 10, but t2 is about 350
             return (theta2 + 360) - theta1;
         }
@@ -244,7 +247,7 @@ class Robot {
         return false;
     }
 
-    void linearEstimate(uint16_t a, uint16_t b) {  //currently unused method
+    void linearEstimate(uint16_t a, uint16_t b) {  // currently unused method
         // angle a * 10, angle b * 10
         // only run if the distance between the two points are low
         // estimate all points between the two angles to fill in all blank spots
@@ -321,12 +324,17 @@ class Robot {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
 
-        RunningMedian r = RunningMedian(theta2 - theta1);
-        r.setSearchMode(1);  // set as binary search mode to help with performance
+        RunningMedian r = RunningMedian(abs(theta2 - theta1));
+
         for (uint16_t i = theta1; i < theta2; i++) {
-            r.add(pointMemory[i]);
+            if (pointMemory[i] != 0) {
+                r.add(pointMemory[i]);
+            }
         }
 
+        if (r.getCount() == 0) {
+            return 0;
+        }
         return r.getMedian();
     }
 
@@ -337,13 +345,22 @@ class Robot {
         // distance should add some level of noiseproofing to measurements, we could
         // use median to be even more resistant to outliers
 
-        // this probably is very slow and inefficient 
-        fullScan();
-        uint16_t di = averageDistance(75, 105);  // because these are the degrees of north i think
-        while (medianDistance(75, 105) - di < 300) {
-            rightMotors(1, Direction::FRONT);
-            leftMotors(1, Direction::FRONT);
-            fullScan();
+        // this probably is very slow and inefficient
+        fullScan(600);
+        uint16_t di = medianDistance(170, 190);  // because these are the degrees of north i think
+        while (di == 0) {
+            fullScan(600);
+            di = medianDistance(170,190);
+        }
+        uint16_t dt = di;
+        while (abs(dt - di) < 300) {
+            rightMotors(10, Direction::FRONT);
+            leftMotors(10, Direction::FRONT);
+            do { 
+                fullScan(600);
+                dt = medianDistance(170,190);
+                printText(String(di) +"\n"+ String(dt) + "\n" + String(dt-di));
+            } while (dt == 0);
         }
         stop();
     }
@@ -447,7 +464,7 @@ class Robot {
 
         pinMode(SOLENOID_PIN, OUTPUT);
 
-        Serial.begin(9600);
+        //Serial.begin(9600);
         lidar.begin(Serial1);
 
         pinMode(MOTOCTL, OUTPUT);
@@ -460,11 +477,24 @@ class Robot {
     }
 
     void exportLidarData() {
-        fullScan();
+        fullScan(400);
         for (uint16_t i = 0; i < 3600; i++) {
-            Serial.println(String((float)i/10) + " " + String(pointMemory[i]));
+            Serial.println(String((float)i / 10) + " " + String(pointMemory[i]));
         }
         Serial.println("\n\n\n");
+        
+    }
+
+    void fullScanTimer() {
+        uint32_t t1 = millis();
+        fullScan(400);
+        Serial.println("time taken: " + String((millis()-t1)));
+    }
+
+    void methodTester() {
+        fullScan(600);
+        travel30cm();
+
     }
 };
 
@@ -472,4 +502,7 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() { robot.exportLidarData(); }
+void loop() { 
+    robot.methodTester();
+    delay(10000);
+}
