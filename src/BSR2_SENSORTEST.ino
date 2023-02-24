@@ -3,15 +3,11 @@
     TESTS:
       test wall angle
       test align with wall
-      test move 30cm
       test medkit dispenser and blink
-      test fullscan
-      test out data but at lower scan speeds
-      test median calculator
       live memory performance testing
 
     CODE:
-      improve filter
+      rewrite angle to wall with line library
       clean up code and remove deprecated stuff
       train pi with data
       find implementations for linear estimate
@@ -35,6 +31,7 @@
 #include <RPLidar.h>
 #include <RunningMedian.h>
 #include <Wire.h>
+#include <curveFitting.h>
 
 #include "Adafruit_TSL2561_U.h"
 
@@ -144,8 +141,8 @@ class Robot {
 
         // this will run until we accept 360 points
 
-        //clear current pointcloud
-        memset(pointMemory,0,3600);
+        // clear current pointcloud
+        memset(pointMemory, 0, 3600);
         uint16_t sucsess = 0;
         while (sucsess < n) {
             if (readLidar()) {
@@ -158,7 +155,7 @@ class Robot {
         // to update with line fitting library.
         // returns -90 to 90 deg
         // update lidar
-        fullScan(400);
+        fullScan(600);
 
         uint32_t sum_x = 0;
         uint32_t sum_y = 0;
@@ -167,17 +164,19 @@ class Robot {
         uint32_t sum_xy = 0;
         uint16_t n = 0;
 
-        for (uint16_t i = theta1; i < theta1 - theta2; i++) {
-            if (pointMemory[i] == 0) continue;
-            n++;
-            sum_x += pointMemory[i] * cos((i / 10) * DEG_TO_RAD);
-            sum_y += pointMemory[i] * sin((i / 10) * DEG_TO_RAD);
-            sum_x2 += (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * cos((i / 10) * DEG_TO_RAD));
-            sum_y2 += (pointMemory[i] * sin((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
-            sum_xy = sum_xy + (pointMemory[i] * cos((i / 10) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10) * DEG_TO_RAD));
+        for (uint16_t i = theta1 * 10; i < (theta2 * 10) - (theta1 * 10); i++) {
+            if (pointMemory[i] != 0) {
+                n++;
+                sum_x += pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
+                sum_y += pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
+                sum_x2 += (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD));
+                sum_y2 += (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
+                sum_xy = sum_xy + (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
+            }
         }
-        uint16_t y = n * sum_xy - sum_x * sum_y;
-        uint16_t x = n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
+        uint32_t y = n * sum_xy - sum_x * sum_y;
+        uint32_t x = n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
+        Serial.println(String(x) + " " + String(y) + " " + String(n) + " " + String(sum_x));
         return atan2(y, x) * RAD_TO_DEG;
     }
 
@@ -324,9 +323,9 @@ class Robot {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
 
-        RunningMedian r = RunningMedian(abs(theta2 - theta1));
+        RunningMedian r = RunningMedian(abs(theta2 * 10 - theta1 * 10));
 
-        for (uint16_t i = theta1; i < theta2; i++) {
+        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
                 r.add(pointMemory[i]);
             }
@@ -350,16 +349,16 @@ class Robot {
         uint16_t di = medianDistance(170, 190);  // because these are the degrees of north i think
         while (di == 0) {
             fullScan(600);
-            di = medianDistance(170,190);
+            di = medianDistance(170, 190);
         }
         uint16_t dt = di;
         while (abs(dt - di) < 300) {
             rightMotors(10, Direction::FRONT);
             leftMotors(10, Direction::FRONT);
-            do { 
+            do {
                 fullScan(600);
-                dt = medianDistance(170,190);
-                printText(String(di) +"\n"+ String(dt) + "\n" + String(dt-di));
+                dt = medianDistance(170, 190);
+                printText(String(di) + "\n" + String(dt) + "\n" + String(dt - di));
             } while (dt == 0);
         }
         stop();
@@ -464,7 +463,7 @@ class Robot {
 
         pinMode(SOLENOID_PIN, OUTPUT);
 
-        //Serial.begin(9600);
+        Serial.begin(9600);
         lidar.begin(Serial1);
 
         pinMode(MOTOCTL, OUTPUT);
@@ -482,19 +481,16 @@ class Robot {
             Serial.println(String((float)i / 10) + " " + String(pointMemory[i]));
         }
         Serial.println("\n\n\n");
-        
     }
 
     void fullScanTimer() {
         uint32_t t1 = millis();
         fullScan(400);
-        Serial.println("time taken: " + String((millis()-t1)));
+        Serial.println("time taken: " + String((millis() - t1)));
     }
 
     void methodTester() {
-        fullScan(600);
-        travel30cm();
-
+        Serial.println(angleToWall(170, 190));
     }
 };
 
@@ -502,7 +498,7 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() { 
+void loop() {
     robot.methodTester();
-    delay(10000);
+    // delay(10000);
 }
