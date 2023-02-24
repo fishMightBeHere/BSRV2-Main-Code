@@ -164,7 +164,7 @@ class Robot {
         uint32_t sum_xy = 0;
         uint16_t n = 0;
 
-        for (uint16_t i = theta1 * 10; i < (theta2 * 10) - (theta1 * 10); i++) {
+        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
                 n++;
                 sum_x += pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
