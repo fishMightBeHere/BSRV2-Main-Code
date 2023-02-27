@@ -151,17 +151,16 @@ class Robot {
         }
     }
 
-    uint16_t angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
+    double angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
         // to update with line fitting library.
         // returns -90 to 90 deg
         // update lidar
-        fullScan(600);
-
-        uint32_t sum_x = 0;
-        uint32_t sum_y = 0;
-        uint32_t sum_x2 = 0;
-        uint32_t sum_y2 = 0;
-        uint32_t sum_xy = 0;
+        
+        double sum_x = 0;
+        double sum_y = 0;
+        double sum_x2 = 0;
+        double sum_y2 = 0;
+        double sum_xy = 0;
         uint16_t n = 0;
 
         for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
@@ -173,11 +172,47 @@ class Robot {
                 sum_y2 += (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
                 sum_xy = sum_xy + (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
             }
+        } 
+        double y = n * sum_xy - sum_x * sum_y;
+        double x = n * sum_x2 - sum_x * sum_x;  
+        Serial.println(String(x) + " " + String(y) + " " + String(n));
+        if (x == 0) return 0;
+        return atan(y/x) * RAD_TO_DEG;
+        //Serial.println(y/x);
+        //return atan2(y, x) * RAD_TO_DEG;
+
+    }
+
+    double curveFitAngleToWall(uint16_t theta1, uint16_t theta2) {
+        uint16_t n = 0;
+        double coefficients[2]; // coefficients of the result
+
+        //store all x and y values into an array we will change arraysize to fit the data it contains
+        double xr[theta2-theta1];
+        double yr[theta2-theta1];
+
+        uint16_t counter = 0; // helper variable for storing results
+        for (uint16_t i = theta1*10; i < theta2 * 10; i++ ) {
+            if (pointMemory[i] != 0) {
+                xr[counter] = pointMemory[i] * cos((i/10.0) * DEG_TO_RAD);
+                yr[counter] = pointMemory[i] * sin((i/10.0) * DEG_TO_RAD);
+                counter++;
+                n++;
+            }
         }
-        uint32_t y = n * sum_xy - sum_x * sum_y;
-        uint32_t x = n * sum_x2 - sum_x * sum_x;  // need checking to prevent x == 0;
-        Serial.println(String(x) + " " + String(y) + " " + String(n) + " " + String(sum_x));
-        return atan2(y, x) * RAD_TO_DEG;
+
+        double x[n];
+        double y[n];
+
+        for (uint16_t i = 0; i < n; i++) {
+            x[i] = xr[i];
+            y[i] = yr[i];
+        }
+        Serial.println("we good");
+        fitCurve(1,n,x,y,2,coefficients);
+        Serial.println("we very good");
+        return atan(coefficients[0]) * RAD_TO_DEG;
+
     }
 
     void calibrateToWall(uint16_t theta1, uint16_t theta2) {
@@ -490,7 +525,8 @@ class Robot {
     }
 
     void methodTester() {
-        Serial.println(angleToWall(170, 190));
+        fullScan(600);
+        Serial.println(String(curveFitAngleToWall(170, 190)));
     }
 };
 
