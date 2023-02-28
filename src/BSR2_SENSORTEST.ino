@@ -152,10 +152,11 @@ class Robot {
     }
 
     double angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
+        /*
         // to update with line fitting library.
         // returns -90 to 90 deg
         // update lidar
-        
+
         double sum_x = 0;
         double sum_y = 0;
         double sum_x2 = 0;
@@ -172,47 +173,47 @@ class Robot {
                 sum_y2 += (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
                 sum_xy = sum_xy + (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
             }
-        } 
+        }
         double y = n * sum_xy - sum_x * sum_y;
-        double x = n * sum_x2 - sum_x * sum_x;  
+        double x = n * sum_x2 - sum_x * sum_x;
         Serial.println(String(x) + " " + String(y) + " " + String(n));
         if (x == 0) return 0;
         return atan(y/x) * RAD_TO_DEG;
         //Serial.println(y/x);
         //return atan2(y, x) * RAD_TO_DEG;
-
+*/
     }
 
     double curveFitAngleToWall(uint16_t theta1, uint16_t theta2) {
-        uint16_t n = 0;
-        double coefficients[2]; // coefficients of the result
+        double coefficients[2];  // coefficients of the result
 
-        //store all x and y values into an array we will change arraysize to fit the data it contains
-        double xr[theta2-theta1];
-        double yr[theta2-theta1];
+        // store all x and y values into an array we will change arraysize to fit the data it contains
+        double xr[theta2 - theta1];
+        double yr[theta2 - theta1];
 
-        uint16_t counter = 0; // helper variable for storing results
-        for (uint16_t i = theta1*10; i < theta2 * 10; i++ ) {
+        uint16_t counter = 0;  // helper variable for storing results
+        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
-                xr[counter] = pointMemory[i] * cos((i/10.0) * DEG_TO_RAD);
-                yr[counter] = pointMemory[i] * sin((i/10.0) * DEG_TO_RAD);
+                xr[counter] = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
+                yr[counter] = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
                 counter++;
-                n++;
             }
         }
 
-        double x[n];
-        double y[n];
+        double x[counter];
+        double y[counter];
 
-        for (uint16_t i = 0; i < n; i++) {
+        for (uint16_t i = 0; i < counter; i++) {
             x[i] = xr[i];
             y[i] = yr[i];
         }
-        Serial.println("we good");
-        fitCurve(1,n,x,y,2,coefficients);
-        Serial.println("we very good");
-        return atan(coefficients[0]) * RAD_TO_DEG;
 
+
+        Serial.print(F("return code: "));
+        Serial.println(String(fitCurve(1, sizeof(x)/sizeof(double), x, y, 2, coefficients)));
+        
+        Serial.println(String(coefficients[0]) + F(" ") + String(coefficients[1]));
+        return coefficients[0];
     }
 
     void calibrateToWall(uint16_t theta1, uint16_t theta2) {
@@ -339,21 +340,21 @@ class Robot {
         analogWrite(EN2, 0);
         digitalWrite(PH2, LOW);
     }
-
-    uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
-        uint32_t r = 0;
-        uint16_t n = 0;
-        for (uint16_t i = theta1; i < theta2; i++) {
-            if (pointMemory[i] == 0) {
-                continue;
+    /*
+        uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
+            uint32_t r = 0;
+            uint16_t n = 0;
+            for (uint16_t i = theta1; i < theta2; i++) {
+                if (pointMemory[i] == 0) {
+                    continue;
+                }
+                n++;
+                r += pointMemory[i];
             }
-            n++;
-            r += pointMemory[i];
+
+            return r / n;
         }
-
-        return r / n;
-    }
-
+    */
     uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
@@ -507,26 +508,20 @@ class Robot {
 
     void printCurrentPoint() {
         readLidar();
-        Serial.println(String(currentPoint.angle) + " " + String(currentPoint.distance) + " " + String(currentPoint.quality) + " " + String(currentPoint.startBit));
+        Serial.println(String(currentPoint.angle) + F(" ") + String(currentPoint.distance) + F(" ") + String(currentPoint.quality) + F(" ") + String(currentPoint.startBit));
     }
 
     void exportLidarData() {
         fullScan(400);
         for (uint16_t i = 0; i < 3600; i++) {
-            Serial.println(String((float)i / 10) + " " + String(pointMemory[i]));
+            Serial.println(String((float)i / 10) + F(" ") + String(pointMemory[i]));
         }
-        Serial.println("\n\n\n");
-    }
-
-    void fullScanTimer() {
-        uint32_t t1 = millis();
-        fullScan(400);
-        Serial.println("time taken: " + String((millis() - t1)));
+        Serial.println(F("\n\n\n"));
     }
 
     void methodTester() {
         fullScan(600);
-        Serial.println(String(curveFitAngleToWall(170, 190)));
+        Serial.println(String(curveFitAngleToWall(175, 185)));
     }
 };
 
