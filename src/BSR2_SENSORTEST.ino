@@ -1,8 +1,6 @@
 /*
   TODO:
     TESTS:
-      test wall angle
-      test align with wall
       test medkit dispenser and blink
       live memory performance testing
 
@@ -150,46 +148,14 @@ class Robot {
             }
         }
     }
-
-    double angleToWall(uint16_t theta1, uint16_t theta2) {  // should return angle relative to east
-        /*
-        // to update with line fitting library.
-        // returns -90 to 90 deg
-        // update lidar
-
-        double sum_x = 0;
-        double sum_y = 0;
-        double sum_x2 = 0;
-        double sum_y2 = 0;
-        double sum_xy = 0;
-        uint16_t n = 0;
-
-        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
-            if (pointMemory[i] != 0) {
-                n++;
-                sum_x += pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
-                sum_y += pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
-                sum_x2 += (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD));
-                sum_y2 += (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
-                sum_xy = sum_xy + (pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD)) * (pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD));
-            }
-        }
-        double y = n * sum_xy - sum_x * sum_y;
-        double x = n * sum_x2 - sum_x * sum_x;
-        Serial.println(String(x) + " " + String(y) + " " + String(n));
-        if (x == 0) return 0;
-        return atan(y/x) * RAD_TO_DEG;
-        //Serial.println(y/x);
-        //return atan2(y, x) * RAD_TO_DEG;
-*/
-    }
-
-    double curveFitAngleToWall(uint16_t theta1, uint16_t theta2) {
+    
+    double angleToWall(uint16_t theta1, uint16_t theta2) {
+        
         double coefficients[2];  // coefficients of the result
 
         // store all x and y values into an array we will change arraysize to fit the data it contains
-        double xr[theta2 - theta1];
-        double yr[theta2 - theta1];
+        double xr[(theta2 - theta1) * 10];
+        double yr[(theta2 - theta1) * 10];
 
         uint16_t counter = 0;  // helper variable for storing results
         for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
@@ -197,6 +163,7 @@ class Robot {
                 xr[counter] = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
                 yr[counter] = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
                 counter++;
+                //if (counter > 50) break;
             }
         }
 
@@ -207,44 +174,48 @@ class Robot {
             x[i] = xr[i];
             y[i] = yr[i];
         }
-
-
-        Serial.print(F("return code: "));
-        Serial.println(String(fitCurve(1, sizeof(x)/sizeof(double), x, y, 2, coefficients)));
-        
-        Serial.println(String(coefficients[0]) + F(" ") + String(coefficients[1]));
-        return coefficients[0];
+        // add some sort of net if fitcurve fails and reattempt to run the function
+        fitCurve(1, sizeof(x)/sizeof(double), y, x, 2, coefficients); //attempted to swap x and y
+        printText(String(atan(coefficients[0]) * RAD_TO_DEG));
+        return atan(coefficients[0]) * RAD_TO_DEG;
     }
 
     void calibrateToWall(uint16_t theta1, uint16_t theta2) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
+        fullScan(400);
         int8_t m = angleToWall(theta1, theta2);
+        
         if (m > 45) {
             while (m < 90) {
-                rightMotors(1, Direction::FRONT);
-                leftMotors(1, Direction::BACK);
+                rightMotors(10, Direction::FRONT);
+                leftMotors(10, Direction::BACK);
+                fullScan(400);
                 m = angleToWall(theta1, theta2);
             }
         } else if (m <= 45 && m > 0) {
             while (m >= 0) {
-                rightMotors(1, Direction::BACK);
-                leftMotors(1, Direction::FRONT);
+                rightMotors(10, Direction::BACK);
+                leftMotors(10, Direction::FRONT);
+                fullScan(400);
                 m = angleToWall(theta1, theta2);
             }
         } else if (m > -45 && m <= 0) {
             while (m < 0) {
-                rightMotors(1, Direction::FRONT);
-                leftMotors(1, Direction::BACK);
+                rightMotors(10, Direction::FRONT);
+                leftMotors(10, Direction::BACK);
+                fullScan(400);
                 m = angleToWall(theta1, theta2);
             }
         } else if (m < -45) {
             while (m < -90) {
-                rightMotors(1, Direction::BACK);
-                leftMotors(1, Direction::FRONT);
+                rightMotors(10, Direction::BACK);
+                leftMotors(10, Direction::FRONT);
+                fullScan(400);
                 m = angleToWall(theta1, theta2);
             }
         }
+        stop();
     }
 
     float angleDistance(float theta1, float theta2) {
@@ -340,21 +311,7 @@ class Robot {
         analogWrite(EN2, 0);
         digitalWrite(PH2, LOW);
     }
-    /*
-        uint32_t averageDistance(uint16_t theta1, uint16_t theta2) {
-            uint32_t r = 0;
-            uint16_t n = 0;
-            for (uint16_t i = theta1; i < theta2; i++) {
-                if (pointMemory[i] == 0) {
-                    continue;
-                }
-                n++;
-                r += pointMemory[i];
-            }
-
-            return r / n;
-        }
-    */
+    
     uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
@@ -520,8 +477,7 @@ class Robot {
     }
 
     void methodTester() {
-        fullScan(600);
-        Serial.println(String(curveFitAngleToWall(175, 185)));
+        calibrateToWall(170,190);   
     }
 };
 
@@ -531,5 +487,5 @@ void setup() { robot.startup(); }
 
 void loop() {
     robot.methodTester();
-    // delay(10000);
+    delay(10000);
 }
