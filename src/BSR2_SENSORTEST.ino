@@ -5,7 +5,6 @@
       live memory performance testing
 
     CODE:
-      rewrite angle to wall with line library
       clean up code and remove deprecated stuff
       train pi with data
       find implementations for linear estimate
@@ -141,80 +140,85 @@ class Robot {
 
         // clear current pointcloud
         memset(pointMemory, 0, 3600);
-        uint16_t sucsess = 0;
-        while (sucsess < n) {
+        uint16_t s = 0;
+        while (s < n) {
             if (readLidar()) {
-                sucsess++;
+                s++;
             }
         }
     }
-    
+
     double angleToWall(uint16_t theta1, uint16_t theta2) {
-        
+        fullScan(200);
+        double sum_x = 0;
+        double sum_y = 0;
+        double sum_x2 = 0; 
+        double sum_y2 = 0;
+        double sum_xy = 0;
+        uint16_t n = 0;
+        for (uint16_t i = theta1*10; i < theta2 * 10; i++) {
+            if (pointMemory[i] != 0) {
+                int16_t y = pointMemory[i]  * cos((i/10.0) * DEG_TO_RAD);
+                int16_t x = pointMemory[i] * sin((i/10.0) * DEG_TO_RAD);
+                sum_x += x;
+                sum_y += y;
+                sum_x2 += x * x;
+                sum_y2 += y * y;
+                sum_xy = sum_xy + x * y;
+                n++;
+            }
+        }
+        double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
+        double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
+        printText(String(m) + " " + String(b));
+        return atan(m) * RAD_TO_DEG;
+    }
+/*
+    double angleToWall(uint16_t theta1, uint16_t theta2) {
+        int8_t i = 1;
         double coefficients[2];  // coefficients of the result
 
-        // store all x and y values into an array we will change arraysize to fit the data it contains
-        double xr[(theta2 - theta1) * 10];
-        double yr[(theta2 - theta1) * 10];
+        //do {
+            fullScan(200);
+            // store all x and y values into an array we will change arraysize to fit the data it contains
+            double xr[(theta2 - theta1) * 10];
+            double yr[(theta2 - theta1) * 10];
 
-        uint16_t counter = 0;  // helper variable for storing results
-        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
-            if (pointMemory[i] != 0) {
-                xr[counter] = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
-                yr[counter] = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
-                counter++;
-                //if (counter > 50) break;
+            uint16_t counter = 0;  // helper variable for storing results
+            for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
+                if (pointMemory[i] != 0) {
+                    xr[counter] = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
+                    yr[counter] = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
+                    counter++;
+                }
             }
-        }
-
-        double x[counter];
-        double y[counter];
-
-        for (uint16_t i = 0; i < counter; i++) {
-            x[i] = xr[i];
-            y[i] = yr[i];
-        }
-        // add some sort of net if fitcurve fails and reattempt to run the function
-        fitCurve(1, sizeof(x)/sizeof(double), y, x, 2, coefficients); //attempted to swap x and y
+            
+            i = fitCurve(1, counter, xr, yr, 2, coefficients); 
+            Serial.println(i); 
+        //} while (i != 0);
         printText(String(atan(coefficients[0]) * RAD_TO_DEG));
+
         return atan(coefficients[0]) * RAD_TO_DEG;
     }
-
+*/
     void calibrateToWall(uint16_t theta1, uint16_t theta2) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
-        fullScan(400);
         int8_t m = angleToWall(theta1, theta2);
-        
-        if (m > 45) {
-            while (m < 90) {
-                rightMotors(10, Direction::FRONT);
-                leftMotors(10, Direction::BACK);
-                fullScan(400);
+
+        if (m > 0) {
+            rightMotors(5, Direction::FRONT);
+            leftMotors(5, Direction::BACK);
+            while (m >= 0) { 
                 m = angleToWall(theta1, theta2);
             }
-        } else if (m <= 45 && m > 0) {
-            while (m >= 0) {
-                rightMotors(10, Direction::BACK);
-                leftMotors(10, Direction::FRONT);
-                fullScan(400);
+        } else if ( m < 0) {
+            rightMotors(5, Direction::BACK);
+            leftMotors(5, Direction::FRONT);
+            while (m <= 0) {    
                 m = angleToWall(theta1, theta2);
             }
-        } else if (m > -45 && m <= 0) {
-            while (m < 0) {
-                rightMotors(10, Direction::FRONT);
-                leftMotors(10, Direction::BACK);
-                fullScan(400);
-                m = angleToWall(theta1, theta2);
-            }
-        } else if (m < -45) {
-            while (m < -90) {
-                rightMotors(10, Direction::BACK);
-                leftMotors(10, Direction::FRONT);
-                fullScan(400);
-                m = angleToWall(theta1, theta2);
-            }
-        }
+        } 
         stop();
     }
 
@@ -311,7 +315,7 @@ class Robot {
         analogWrite(EN2, 0);
         digitalWrite(PH2, LOW);
     }
-    
+
     uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
@@ -476,9 +480,7 @@ class Robot {
         Serial.println(F("\n\n\n"));
     }
 
-    void methodTester() {
-        calibrateToWall(170,190);   
-    }
+    void methodTester() { calibrateToWall(175, 185); }
 };
 
 Robot robot;
@@ -487,5 +489,5 @@ void setup() { robot.startup(); }
 
 void loop() {
     robot.methodTester();
-    delay(10000);
+    delay(1000);
 }
