@@ -205,14 +205,14 @@ class Robot {
         int8_t m = angleToWall(theta1, theta2);
 
         if (m > 0) {
-            rightMotors(5, Direction::FRONT);
-            leftMotors(5, Direction::BACK);
+            rightMotors(10, Direction::FRONT);
+            leftMotors(10, Direction::BACK);
             while (m >= 0) { 
                 m = angleToWall(theta1, theta2);
             }
         } else if ( m < 0) {
-            rightMotors(5, Direction::BACK);
-            leftMotors(5, Direction::FRONT);
+            rightMotors(10, Direction::BACK);
+            leftMotors(10, Direction::FRONT);
             while (m <= 0) {    
                 m = angleToWall(theta1, theta2);
             }
@@ -287,8 +287,6 @@ class Robot {
 
             return filterData(d);
         } else {
-            printText(F("lidar is struggling"));
-
             analogWrite(MOTOCTL, 0);  // stop the rplidar motor
 
             // try to detect RPLIDAR...
@@ -364,14 +362,21 @@ class Robot {
         rightMotors(20,Direction::BACK);
         leftMotors(20,Direction::FRONT);
         delay(9000);//about the time it takes for it to make a turn
-        if (readVl(Direction::FRONT) < 50) {
+        stop();
+        if (readVl(Direction::FRONT) < 150) {
             printText(F("calibrating to wall in front"));
+            delay(2000);
+            fullScan(400);
             calibrateToWall(170,180);
-        } else if (readVl(Direction::RIGHT) < 50) {
+        } else if (readVl(Direction::RIGHT) < 150) {
             printText(F("calibrating to wall to right"));
+            delay(2000);
+            fullScan(400);
             calibrateToWall(260,280);
-        } else if (readVl(Direction::LEFT) < 50) {
+        } else if (readVl(Direction::LEFT) < 150) {
             printText(F("calibrating to wall in left"));
+            delay(2000);
+            fullScan(400);
             calibrateToWall(80,100);
         }
         stop();
