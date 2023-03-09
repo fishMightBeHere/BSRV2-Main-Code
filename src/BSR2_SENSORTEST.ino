@@ -9,13 +9,13 @@
       train pi with data
       find implementations for linear estimate
       create a function that can detect intersections and angles, we need this
-  to know the input theta values for align to wall test NextGenAHRS library test
-  curvefitting library
+  to know the input theta values for align to wall
+      add method to turn exactly 90 deg
 
       reduce floating point math to reduce errer, might be overkill
 
     HARDWARE:
-      add wheel rubber
+      redesign wheels
       make maze
       build communication between pi and nano
 
@@ -135,8 +135,6 @@ class Robot {
     void fullScan(uint16_t n) {
         // does a full scan of the first n accepted points
         // does not work based on start bit due to start bit not necessarily indicating a new rotation
-
-        // this will run until we accept 360 points
 
         // clear current pointcloud
         memset(pointMemory, 0, 3600);
@@ -361,6 +359,23 @@ class Robot {
         stop();
     }
 
+    void turn90DegRight() {
+        rightMotors(20,Direction::BACK);
+        leftMotors(20,Direction::FRONT);
+        delay(9000);//about the time it takes for it to make a turn
+        if (readVl(Direction::FRONT) < 50) {
+            printText(F("calibrating to wall in front"));
+            calibrateToWall(170,180);
+        } else if (readVl(Direction::RIGHT) < 50) {
+            printText(F("calibrating to wall to right"));
+            calibrateToWall(260,280);
+        } else if (readVl(Direction::LEFT) < 50) {
+            printText(F("calibrating to wall in left"));
+            calibrateToWall(80,100);
+        }
+        stop();
+    }
+
     void rightMotors(uint8_t speed, Direction d) {
         rightMotorSpeed = speed;
         switch (d) {
@@ -480,7 +495,11 @@ class Robot {
         Serial.println(F("\n\n\n"));
     }
 
-    void methodTester() { calibrateToWall(175, 185); }
+    void methodTester() { 
+        fullScan(400);
+        turn90DegRight();
+        delay(10000);
+    }
 };
 
 Robot robot;
@@ -489,5 +508,4 @@ void setup() { robot.startup(); }
 
 void loop() {
     robot.methodTester();
-    delay(1000);
 }
