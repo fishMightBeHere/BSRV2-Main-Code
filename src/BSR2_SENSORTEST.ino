@@ -171,34 +171,7 @@ class Robot {
         printText(String(m) + " " + String(b));
         return atan(m) * RAD_TO_DEG;
     }
-/*
-    double angleToWall(uint16_t theta1, uint16_t theta2) {
-        int8_t i = 1;
-        double coefficients[2];  // coefficients of the result
 
-        //do {
-            fullScan(200);
-            // store all x and y values into an array we will change arraysize to fit the data it contains
-            double xr[(theta2 - theta1) * 10];
-            double yr[(theta2 - theta1) * 10];
-
-            uint16_t counter = 0;  // helper variable for storing results
-            for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
-                if (pointMemory[i] != 0) {
-                    xr[counter] = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
-                    yr[counter] = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
-                    counter++;
-                }
-            }
-            
-            i = fitCurve(1, counter, xr, yr, 2, coefficients); 
-            Serial.println(i); 
-        //} while (i != 0);
-        printText(String(atan(coefficients[0]) * RAD_TO_DEG));
-
-        return atan(coefficients[0]) * RAD_TO_DEG;
-    }
-*/
     void calibrateToWall(uint16_t theta1, uint16_t theta2) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
@@ -209,12 +182,14 @@ class Robot {
             leftMotors(10, Direction::BACK);
             while (m >= 0) { 
                 m = angleToWall(theta1, theta2);
+                //printText("turn left");
             }
         } else if ( m < 0) {
             rightMotors(10, Direction::BACK);
             leftMotors(10, Direction::FRONT);
             while (m <= 0) {    
                 m = angleToWall(theta1, theta2);
+                //printText("turn right");
             }
         } 
         stop();
@@ -503,7 +478,7 @@ class Robot {
 
     void methodTester() { 
         fullScan(400);
-        turn90DegRight();
+        calibrateToWall(260, 280);
         delay(10000);
     }
 };
