@@ -150,14 +150,14 @@ class Robot {
         fullScan(200);
         double sum_x = 0;
         double sum_y = 0;
-        double sum_x2 = 0; 
+        double sum_x2 = 0;
         double sum_y2 = 0;
         double sum_xy = 0;
         uint16_t n = 0;
-        for (uint16_t i = theta1*10; i < theta2 * 10; i++) {
+        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
-                int16_t y = pointMemory[i]  * cos((i/10.0) * DEG_TO_RAD);
-                int16_t x = pointMemory[i] * sin((i/10.0) * DEG_TO_RAD);
+                int16_t y = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
+                int16_t x = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
                 sum_x += x;
                 sum_y += y;
                 sum_x2 += x * x;
@@ -172,27 +172,63 @@ class Robot {
         return atan(m) * RAD_TO_DEG;
     }
 
-    void calibrateToWall(uint16_t theta1, uint16_t theta2) {
+    Direction directionInverter(Direction d, bool i) { // helper function for calibrate to wall, i determines whether to actually invert it
+        if (i) {
+            switch (d) {
+                case FRONT:
+                    return Direction::BACK;
+                    break;
+                case RIGHT:
+                    return Direction::LEFT;
+                    break;
+                case BACK:
+                    return Direction::FRONT;
+                    break;
+                case LEFT:
+                    return Direction::RIGHT;
+                    break;
+            }
+        }
+        return d;
+    }
+
+    void calibrateToWall(uint16_t theta1, uint16_t theta2, bool invert) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
         int8_t m = angleToWall(theta1, theta2);
 
         if (m > 0) {
-            rightMotors(10, Direction::FRONT);
-            leftMotors(10, Direction::BACK);
-            while (m >= 0) { 
+            rightMotors(10, directionInverter(Direction::FRONT, invert));
+            leftMotors(10, directionInverter(Direction::BACK, invert));
+            while (m >= 0) {
                 m = angleToWall(theta1, theta2);
-                //printText("turn left");
+                // printText("turn left");
             }
-        } else if ( m < 0) {
-            rightMotors(10, Direction::BACK);
-            leftMotors(10, Direction::FRONT);
-            while (m <= 0) {    
+        } else if (m < 0) {
+            rightMotors(10, directionInverter(Direction::BACK, invert));
+            leftMotors(10, directionInverter(Direction::FRONT, invert));
+            while (m <= 0) {
                 m = angleToWall(theta1, theta2);
-                //printText("turn right");
+                // printText("turn right");
             }
-        } 
+        }
         stop();
+    }
+
+    void calibrateToWall(Direction d) {
+        switch (d) {
+            case FRONT:
+                calibrateToWall(170, 190, false);
+                break;
+            case RIGHT:
+                calibrateToWall(260, 280, true);
+                break;
+            case LEFT:
+                calibrateToWall(80, 100, true); //i know for right you need to invert direction of wheels but not sure for left
+                break;
+            default:
+                break;
+        }
     }
 
     float angleDistance(float theta1, float theta2) {
@@ -333,26 +369,25 @@ class Robot {
     }
 
     void turn90DegRight() {
-        
-        rightMotors(20,Direction::BACK);
-        leftMotors(20,Direction::FRONT);
-        delay(9000);//about the time it takes for it to make a turn
+        rightMotors(20, Direction::BACK);
+        leftMotors(20, Direction::FRONT);
+        delay(9000);  // about the time it takes for it to make a turn
         stop();
         if (readVl(Direction::FRONT) < 150) {
             printText(F("calibrating to wall in front"));
             delay(2000);
             fullScan(400);
-            calibrateToWall(170,180);
+            calibrateToWall(Direction::FRONT);
         } else if (readVl(Direction::RIGHT) < 150) {
             printText(F("calibrating to wall to right"));
             delay(2000);
             fullScan(400);
-            calibrateToWall(260,280);
+            calibrateToWall(Direction::RIGHT);
         } else if (readVl(Direction::LEFT) < 150) {
             printText(F("calibrating to wall in left"));
             delay(2000);
             fullScan(400);
-            calibrateToWall(80,100);
+            calibrateToWall(Direction::LEFT);
         }
         stop();
     }
@@ -476,9 +511,18 @@ class Robot {
         Serial.println(F("\n\n\n"));
     }
 
-    void methodTester() { 
+    void methodTester() {
         fullScan(400);
-        calibrateToWall(260, 280);
+        if (readVl(Direction::FRONT) < 100) {
+            calibrateToWall(Direction::FRONT);
+        } else if (readVl(Direction::RIGHT) < 100) {
+            calibrateToWall(Direction::RIGHT);
+
+        } else if (readVl(Direction::LEFT) < 100) {
+            calibrateToWall(Direction::LEFT);
+        } else {
+            printText("ERROR");
+        }
         delay(10000);
     }
 };
@@ -487,6 +531,4 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() {
-    robot.methodTester();
-}
+void loop() { robot.methodTester(); }
