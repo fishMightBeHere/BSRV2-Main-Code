@@ -11,6 +11,9 @@
       create a function that can detect intersections and angles, we need this
   to know the input theta values for align to wall
       add method to turn exactly 90 deg
+        add functionality for 360 deg wraparound and calibrate to back
+        implement a kdtree to store nodes
+
 
       reduce floating point math to reduce errer, might be overkill
 
@@ -28,7 +31,7 @@
 #include <RPLidar.h>
 #include <RunningMedian.h>
 #include <Wire.h>
-#include <curveFitting.h>
+#include <TwoDTree.h>
 
 #include "Adafruit_TSL2561_U.h"
 
@@ -43,6 +46,8 @@
 
 #define MOTOCTL A7
 
+#define stde 30 // standard error for filtering
+
 float pointMemory[3600];
 
 struct LidarData {
@@ -50,6 +55,14 @@ struct LidarData {
     float angle;
     bool startBit;
     byte quality;
+};
+
+struct Node {
+    uint8_t x;
+    uint8_t y;
+    uint16_t id;
+    Node* left;
+    Node* right;
 };
 
 LidarData currentPoint;
@@ -71,7 +84,6 @@ class Robot {
     RPLidar lidar;
 
    private:
-    const uint8_t s = 30;  // standard error change this solution sucks for encapsulation
     uint16_t e = 0;        // error
     uint16_t previousAngle = 0;
 
@@ -138,10 +150,10 @@ class Robot {
 
         // clear current pointcloud
         memset(pointMemory, 0, 3600);
-        uint16_t s = 0;
-        while (s < n) {
+        uint16_t i = 0;
+        while (i < n) {
             if (readLidar()) {
-                s++;
+                i++;
             }
         }
     }
@@ -168,25 +180,21 @@ class Robot {
         }
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
         double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
-        printText(String(m) + " " + String(b));
+        printText(String(atan(m)*RAD_TO_DEG));
         return atan(m) * RAD_TO_DEG;
     }
 
-    Direction directionInverter(Direction d, bool i) { // helper function for calibrate to wall, i determines whether to actually invert it
+    Direction directionInverter(Direction d, bool i) {  // helper function for calibrate to wall, i determines whether to actually invert it
         if (i) {
             switch (d) {
                 case FRONT:
                     return Direction::BACK;
-                    break;
                 case RIGHT:
                     return Direction::LEFT;
-                    break;
                 case BACK:
                     return Direction::FRONT;
-                    break;
                 case LEFT:
                     return Direction::RIGHT;
-                    break;
             }
         }
         return d;
@@ -202,14 +210,12 @@ class Robot {
             leftMotors(10, directionInverter(Direction::BACK, invert));
             while (m >= 0) {
                 m = angleToWall(theta1, theta2);
-                // printText("turn left");
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
             while (m <= 0) {
                 m = angleToWall(theta1, theta2);
-                // printText("turn right");
             }
         }
         stop();
@@ -224,9 +230,7 @@ class Robot {
                 calibrateToWall(260, 280, true);
                 break;
             case LEFT:
-                calibrateToWall(80, 100, true); //i know for right you need to invert direction of wheels but not sure for left
-                break;
-            default:
+                calibrateToWall(80, 100, true); 
                 break;
         }
     }
@@ -254,13 +258,13 @@ class Robot {
         // i realize that this will not work without some dumb variable scope magic
 
         if (d.quality == 15 && d.distance < 6000 && d.distance > 150 && (d.distance < 3900 || d.distance > 4100) && (d.angle < 123 || d.angle > 125)) {
-            if (d.angle < 360 && angleDistance(previousAngle, d.angle) < s + e) {  // make sure that the angle can never be above 360 or else program dies
+            if (d.angle < 360 && angleDistance(previousAngle, d.angle) < stde + e) {  // make sure that the angle can never be above 360 or else program dies
                 pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
                 return true;
             } else
-                e += s;
+                e += stde;
         } else
-            e += s;
+            e += stde;
 
         pointMemory[(uint16_t)(d.angle * 10)] = 0;
         return false;
@@ -513,17 +517,8 @@ class Robot {
 
     void methodTester() {
         fullScan(400);
-        if (readVl(Direction::FRONT) < 100) {
-            calibrateToWall(Direction::FRONT);
-        } else if (readVl(Direction::RIGHT) < 100) {
-            calibrateToWall(Direction::RIGHT);
-
-        } else if (readVl(Direction::LEFT) < 100) {
-            calibrateToWall(Direction::LEFT);
-        } else {
-            printText("ERROR");
-        }
-        delay(10000);
+        turn90DegRight();
+        delay(5000);
     }
 };
 
