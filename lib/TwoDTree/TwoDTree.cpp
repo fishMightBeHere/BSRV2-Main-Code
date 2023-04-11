@@ -18,8 +18,27 @@ T& TwoDTree<T>::get(uint16_t x, uint16_t y) {
     T currentItem = _root;
     uint16_t k = 0;
     while (true) {
-        if (k%2 == 0) {
+        if (currentItem.x == x && currentItem.y == y) {
+            return currentItem;
+        }
 
+        if (k%2 == 0) {
+            if (currentItem.left != nullptr && currentItem.x < x) {
+                currentItem = *currentItem.left;
+            } else if (currentItem.right != nullptr && currentItem.x >= x) {
+                currentItem = *currentItem.right;
+            }
+            else {
+                throw "point does not exist";
+            }
+        } else {
+            if (currentItem.left != nullptr && currentItem.y < y) {
+                currentItem = *currentItem.left;
+            } else if (currentItem.right != nullptr && currentItem.y >= y) {
+                currentItem = *currentItem.right;
+            } else {
+                throw "point does not exist";
+            }
         }
     }
     
