@@ -1,18 +1,9 @@
 #include "TwoDTree.h"
-template<typename T>
-TwoDTree<T>::TwoDTree(const uint16_t maxSize) {
-    _values = (T *) malloc(sizeof(T) * maxSize);
-}
 
 template<typename T>
-TwoDTree<T>::~TwoDTree() {
-    free(_values);
-}
-
-template<typename T>
-T& TwoDTree<T>::get(uint16_t x, uint16_t y) {
+T& TwoDTree<T>::get(int x, int y) {
     if (_root == nullptr) {
-        throw "Tree is empty, root dne";
+        return NULL;
     }
 
     T currentItem = _root;
@@ -23,26 +14,26 @@ T& TwoDTree<T>::get(uint16_t x, uint16_t y) {
         }
 
         if (k%2 == 0) {
-            if (currentItem.left != nullptr && currentItem.x < x) {
-                currentItem = *currentItem.left;
+            if (currentItem.leftNode != nullptr && currentItem.x < x) {
+                currentItem = *currentItem.leftNode;
             } else if (currentItem.right != nullptr && currentItem.x >= x) {
                 currentItem = *currentItem.right;
             }
             else {
-                throw "point does not exist";
+                return NULL;
             }
         } else {
-            if (currentItem.left != nullptr && currentItem.y < y) {
-                currentItem = *currentItem.left;
+            if (currentItem.leftNode != nullptr && currentItem.y < y) {
+                currentItem = *currentItem.leftNode;
             } else if (currentItem.right != nullptr && currentItem.y >= y) {
                 currentItem = *currentItem.right;
             } else {
-                throw "point does not exist";
+                return NULL;
             }
         }
     }
     
-    throw "Point does not exist";
+    return NULL;
 }
 
 template<typename T>
@@ -51,14 +42,14 @@ void TwoDTree<T>::put(T item) {
         _root = item;
     }
 
-    uint16_t k = 0;
+    boolean k = true;
     T compareItem = _root;
     while (true) {
-        if (k%2 == 0) {
-            if (comparatorX(item,compareItem) == -1 && compareItem.left != nullptr) {
-                compareItem == *compareItem.left;
+        if (k) {
+            if (comparatorX(item,compareItem) == -1 && compareItem.leftNode != nullptr) {
+                compareItem == *compareItem.leftNode;
             } else {
-                compareItem.left = *item;
+                compareItem.leftNode = *item;
                 _values[_putIndex] = item;
                 break;
             }
@@ -71,10 +62,10 @@ void TwoDTree<T>::put(T item) {
                 break;
             }
         } else {
-            if (comparatorY(item,compareItem) == -1 && compareItem.left != nullptr) {
-                compareItem == *compareItem.left;
+            if (comparatorY(item,compareItem) == -1 && compareItem.leftNode != nullptr) {
+                compareItem == *compareItem.leftNode;
             } else {
-                compareItem.left = *item;
+                compareItem.leftNode = *item;
                 _values[_putIndex] = item;
                 break;
             }
@@ -87,25 +78,25 @@ void TwoDTree<T>::put(T item) {
                 break;
             }
         }
-        k++;
+        k = !k;
     }        
     _putIndex++;
 }
 
+template<typename T> 
+boolean TwoDTree<T>::contains(int x, int y) {
+    return get(x,y) = NULL ? true : false;
+}
+
+
 template<typename T>
 inline
 int8_t TwoDTree<T>::comparatorX(T i1, T i2) {
-    if (i1.x < i2.x) {
-        return -1;
-    } 
-    return 1;
+    return i1.x < i2.y ? -1 : 1;
 }
 
 template<typename T>
 inline
 int8_t TwoDTree<T>::comparatorY(T i1, T i2) {
-    if (i1.y < i2.y) {
-        return -1;
-    } 
-    return 1;
+    return i1.y < i2.y ? -1 : 1;
 }

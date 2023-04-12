@@ -32,7 +32,7 @@
 #include <RunningMedian.h>
 #include <Wire.h>
 #include <TwoDTree.h>
-
+#include <Vector.h>
 #include "Adafruit_TSL2561_U.h"
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -48,7 +48,6 @@
 
 #define stde 30 // standard error for filtering
 
-float pointMemory[3600];
 
 struct LidarData {
     float distance;
@@ -58,11 +57,18 @@ struct LidarData {
 };
 
 struct Node {
-    uint8_t x;
-    uint8_t y;
-    uint16_t id;
-    Node* left;
-    Node* right;
+    int8_t x; 
+    int8_t y;
+    Node* leftNode; 
+    Node* rightNode; 
+
+    // these are bools confirming connectivity with the 4 possible geometrically adjacent nodes, we can then calculate each adjacent node's coordinates
+    bool up : 1;
+    bool down : 1;
+    bool left : 1;
+    bool right : 1; 
+    
+    bool explored : 1;
 };
 
 LidarData currentPoint;
@@ -78,7 +84,7 @@ Adafruit_VL6180X tofLeft;   // connected to sd sc 0
 Adafruit_TSL2561_Unified luxSensor = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);  // connected to sd sc 4
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
-enum Direction { FRONT, RIGHT, LEFT, BACK };
+enum Direction { FRONT, RIGHT, BACK, LEFT };
 
 class Robot {
     RPLidar lidar;
@@ -86,6 +92,17 @@ class Robot {
    private:
     uint16_t e = 0;        // error
     uint16_t previousAngle = 0;
+
+    float pointMemory[3600];
+
+    TwoDTree<Node> nodeMap = TwoDTree<Node>(256);
+
+    Node *_storageArr[50];
+    Vector<Node*> hStack;
+    
+    int8_t x = 0;
+    int8_t y = 0;
+    Direction currentDirection = FRONT;
 
     void TCA(uint8_t bus) {
         Wire.beginTransmission(0x70);
@@ -372,9 +389,9 @@ class Robot {
         stop();
     }
 
-    void turn90DegRight() {
-        rightMotors(20, Direction::BACK);
-        leftMotors(20, Direction::FRONT);
+    void turn90DegRight(boolean invert) {
+        rightMotors(20, directionInverter(Direction::BACK, invert));
+        leftMotors(20, directionInverter(Direction::FRONT, invert));
         delay(9000);  // about the time it takes for it to make a turn
         stop();
         if (readVl(Direction::FRONT) < 150) {
@@ -500,6 +517,68 @@ class Robot {
 
         pinMode(MOTOCTL, OUTPUT);
         analogWrite(MOTOCTL, 255);
+
+        hStack.setStorage(_storageArr);
+    }
+    //entry point for the entire robot
+
+    void addpoint() {
+        Node n;
+        n.x = x;
+        n.y = y;
+        n.leftNode = NULL;
+        n.rightNode = NULL;
+        if (readVl(Direction::BACK) < 50) {
+            n.down = true;
+        }
+        if (readVl(Direction::LEFT) < 50) {
+            n.left = true;
+        }
+        if (readVl(Direction::FRONT) < 50) {
+            n.up = true;
+        }
+        if (readVl(Direction::RIGHT) < 50) {
+            n.right = true;
+        }
+        nodeMap.put(n);
+    }
+
+    void move(Direction d) {
+        //traverse the robot to the geographical direction of the maze (not relative right to the robot)
+        // f r b l
+        for (uint8_t i = 0; i<abs(d-currentDirection)<=2 ? i : 4-i; i++) {
+            turn90DegRight(abs(d-currentDirection) <=2 ? false : true);
+        }
+        currentDirection = d;
+
+        travel30cm();
+
+        //update position in memeory
+        switch (d) {
+            case FRONT:
+                y++;
+                break;
+            case RIGHT:
+                x++;
+                break;
+            case BACK:
+                y--;
+                break;
+            case LEFT:
+                x--;
+                break;
+        }
+    }
+
+    Direction[] djikstra(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+        //return a set of instructions to backtrack from point a to b
+
+    }
+
+    void run() { 
+        addpoint();
+        nodeMap.get(x,y);
+        
     }
 
     void printCurrentPoint() {
@@ -516,9 +595,7 @@ class Robot {
     }
 
     void methodTester() {
-        fullScan(400);
-        turn90DegRight();
-        delay(5000);
+       
     }
 };
 
