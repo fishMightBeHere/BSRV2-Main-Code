@@ -34,6 +34,7 @@
 #include <TwoDTree.h>
 #include <Vector.h>
 #include "Adafruit_TSL2561_U.h"
+#include <Dequeue.h>
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
@@ -68,7 +69,6 @@ struct Node {
     bool left : 1;
     bool right : 1; 
     
-    bool explored : 1;
 };
 
 LidarData currentPoint;
@@ -97,8 +97,7 @@ class Robot {
 
     TwoDTree<Node> nodeMap = TwoDTree<Node>(256);
 
-    Node *_storageArr[50];
-    Vector<Node*> hStack;
+    Dequeue<Direction> hStack = Dequeue<Direction>(50);
     
     int8_t x = 0;
     int8_t y = 0;
@@ -571,7 +570,8 @@ class Robot {
     }
 
     Direction[] djikstra(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
-        //return a set of instructions to backtrack from point a to b
+        //return a set of instructions to backtrack from point a to b 
+        //fill a queue that is just a set of instrutctions
 
     }
 
