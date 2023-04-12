@@ -22,6 +22,8 @@ class Dequeue {
 
         uint16_t size();
 
+        void clear();
+
     protected:
         T* _values;
 }

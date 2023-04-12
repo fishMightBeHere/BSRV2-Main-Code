@@ -71,6 +71,10 @@ struct Node {
     
 };
 
+TwoDTree<Node> nodeMap = TwoDTree<Node>(256);
+
+Dequeue<Direction> hStack = Dequeue<Direction>(50);
+
 LidarData currentPoint;
 
 byte rightMotorSpeed;
@@ -94,10 +98,6 @@ class Robot {
     uint16_t previousAngle = 0;
 
     float pointMemory[3600];
-
-    TwoDTree<Node> nodeMap = TwoDTree<Node>(256);
-
-    Dequeue<Direction> hStack = Dequeue<Direction>(50);
     
     int8_t x = 0;
     int8_t y = 0;
@@ -576,8 +576,26 @@ class Robot {
     }
 
     void run() { 
-        addpoint();
-        nodeMap.get(x,y);
+        if (!nodeMap.contains(x,y)) {
+            addpoint();
+        }
+        Node* currentNode = nodeMap.get(x,y);
+
+        if (currentNode->right == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::RIGHT) {
+            hStack.push(Direction::RIGHT);
+            move(Direction::RIGHT);
+        } else if (currentNode->down == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::BACK) {
+            hStack.push(Direction::BACK);
+            move(Direction::BACK);
+        } else if (currentNode->left == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::LEFT) {
+            hStack.push(Direction::LEFT);
+            move(Direction::LEFT);
+        } else if (currentNode->up == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::FRONT) {
+            hStack.push(Direction::FRONT);
+            move(Direction::FRONT);
+        } else {
+            //djikstra and backtrack
+        }
         
     }
 
