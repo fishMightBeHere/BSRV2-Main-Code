@@ -29,6 +29,8 @@ class Dequeue {
         
         bool isFull();
 
+        void clear();
+
     protected:
         T* _values;
         int _size;

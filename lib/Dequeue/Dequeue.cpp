@@ -82,3 +82,9 @@ template<typename T>
 bool Dequeue<T>::isFull() {
     return ((_front == 0 && _rear == _size - 1) || _front == _rear + 1); 
 }
+
+template<typename T>
+void Dequeue<T>::clear() {
+    _front = -1;
+    _rear = -1;
+}
