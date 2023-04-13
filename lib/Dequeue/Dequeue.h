@@ -25,6 +25,10 @@ class Dequeue {
 
         uint16_t size();
 
+        bool isEmpty();
+        
+        bool isFull();
+
     protected:
         T* _values;
         int _size;
