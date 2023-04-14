@@ -6,18 +6,18 @@ T* TwoDTree<T>::get(int x, int y) {
         return NULL;
     }
 
-    T* currentItem = _root;
-    uint16_t k = 0;
+    T* currentItem = &_root;
+    bool k = false;
     while (true) {
         if (currentItem->x == x && currentItem->y == y) {
             return currentItem;
         }
 
-        if (k%2 == 0) {
+        if (k) {
             if (currentItem->leftNode != nullptr && currentItem->x < x) {
                 currentItem = currentItem->leftNode;
-            } else if (currentItem->right != nullptr && currentItem->x >= x) {
-                currentItem = currentItem->right;
+            } else if (currentItem->rightNode != nullptr && currentItem->x >= x) {
+                currentItem = currentItem->rightNode;
             }
             else {
                 return NULL;
@@ -25,12 +25,13 @@ T* TwoDTree<T>::get(int x, int y) {
         } else {
             if (currentItem->leftNode != nullptr && currentItem->y < y) {
                 currentItem = currentItem->leftNode;
-            } else if (currentItem->right != nullptr && currentItem->y >= y) {
+            } else if (currentItem->rightNode != nullptr && currentItem->y >= y) {
                 currentItem = currentItem->right;
             } else {
                 return NULL;
             }
         }
+        k = !k;
     }
     
     return NULL;
@@ -49,32 +50,32 @@ void TwoDTree<T>::put(T item) {
             if (comparatorX(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
-                compareItem->leftNode = &item;
                 _values[_putIndex] = item;
+                compareItem->leftNode = &_values[_putIndex]; //item in parameter is stored in stack which will be destroyed, we need the pointer towards the permanent storage in _values
                 break;
             }
 
-            if (comparatorX(&item, compareItem) != -1 && compareItem->right != nullptr) {
+            if (comparatorX(&item, compareItem) != -1 && compareItem->rightNode != nullptr) {
                 compareItem = compareItem->right;
             } else {
-                compareItem->right = &item;
                 _values[_putIndex] = item;
+                compareItem->rightNode = &_values[_putIndex];
                 break;
             }
         } else {
             if (comparatorY(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
-                compareItem->leftNode = &item;
                 _values[_putIndex] = item;
+                compareItem->leftNode = &_values[_putIndex];
                 break;
             }
 
-            if (comparatorY(&item,compareItem) != -1 && compareItem->right != nullptr) {
-                compareItem = compareItem->right;
+            if (comparatorY(&item,compareItem) != -1 && compareItem->rightNode != nullptr) {
+                compareItem = compareItem->rightNode;
             } else {
-                compareItem->right = &item;
                 _values[_putIndex] = item;
+                compareItem->rightNode = &_values[_putIndex];
                 break;
             }
         }
