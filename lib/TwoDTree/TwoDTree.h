@@ -19,12 +19,11 @@ class TwoDTree {
 
     protected:
         uint16_t _maxSize;
-        uint16_t _amount;
-        T* _root;
+        T _root;
         uint16_t _putIndex;
         T* _values;
 
-        int8_t comparatorX(T i1, T i2);
-        int8_t comparatorY(T i1, T i2);
+        int8_t comparatorX(T* i1, T* i2);
+        int8_t comparatorY(T* i1, T* i2);
 
 };

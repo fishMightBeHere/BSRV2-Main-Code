@@ -32,7 +32,6 @@
 #include <RunningMedian.h>
 #include <Wire.h>
 #include <TwoDTree.h>
-#include <Vector.h>
 #include "Adafruit_TSL2561_U.h"
 #include <Dequeue.h>
 
@@ -49,6 +48,7 @@
 
 #define stde 30 // standard error for filtering
 
+enum Direction { FRONT, RIGHT, BACK, LEFT };
 
 struct LidarData {
     float distance;
@@ -71,9 +71,9 @@ struct Node {
     
 };
 
-TwoDTree<Node> nodeMap = TwoDTree<Node>(256);
+TwoDTree<Node> nodeMap(255);
 
-Dequeue<Direction> hStack = Dequeue<Direction>(50);
+Dequeue<Direction> hStack(50);
 
 LidarData currentPoint;
 
@@ -87,17 +87,16 @@ Adafruit_VL6180X tofLeft;   // connected to sd sc 0
 
 Adafruit_TSL2561_Unified luxSensor = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);  // connected to sd sc 4
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
-
-enum Direction { FRONT, RIGHT, BACK, LEFT };
+float pointMemory[3600];
 
 class Robot {
-    RPLidar lidar;
 
-   private:
+   private:    
+   RPLidar lidar;
+
     uint16_t e = 0;        // error
     uint16_t previousAngle = 0;
 
-    float pointMemory[3600];
     
     int8_t x = 0;
     int8_t y = 0;
@@ -226,12 +225,14 @@ class Robot {
             leftMotors(10, directionInverter(Direction::BACK, invert));
             while (m >= 0) {
                 m = angleToWall(theta1, theta2);
+                printText("" + m);
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
             while (m <= 0) {
                 m = angleToWall(theta1, theta2);
+                printText("" + m);
             }
         }
         stop();
@@ -391,8 +392,9 @@ class Robot {
     void turn90DegRight(boolean invert) {
         rightMotors(20, directionInverter(Direction::BACK, invert));
         leftMotors(20, directionInverter(Direction::FRONT, invert));
-        delay(9000);  // about the time it takes for it to make a turn
+        delay(10000);  // about the time it takes for it to make a turn
         stop();
+        /**
         if (readVl(Direction::FRONT) < 150) {
             printText(F("calibrating to wall in front"));
             delay(2000);
@@ -409,6 +411,10 @@ class Robot {
             fullScan(400);
             calibrateToWall(Direction::LEFT);
         }
+        */
+        delay(2000);
+        fullScan(400);
+        calibrateToWall(Direction::RIGHT);
         stop();
     }
 
@@ -516,8 +522,6 @@ class Robot {
 
         pinMode(MOTOCTL, OUTPUT);
         analogWrite(MOTOCTL, 255);
-
-        hStack.setStorage(_storageArr);
     }
     //entry point for the entire robot
 
@@ -527,21 +531,21 @@ class Robot {
         n.y = y;
         n.leftNode = NULL;
         n.rightNode = NULL;
-        if (readVl(Direction::BACK) < 50) {
+        if (readVl(Direction::BACK) < 100) {
             n.down = true;
         }
-        if (readVl(Direction::LEFT) < 50) {
+        if (readVl(Direction::LEFT) < 100) {
             n.left = true;
         }
-        if (readVl(Direction::FRONT) < 50) {
+        if (readVl(Direction::FRONT) < 100) {
             n.up = true;
         }
-        if (readVl(Direction::RIGHT) < 50) {
+        if (readVl(Direction::RIGHT) < 100) {
             n.right = true;
         }
         nodeMap.put(n);
     }
-
+/*
     void move(Direction d) {
         //traverse the robot to the geographical direction of the maze (not relative right to the robot)
         // f r b l
@@ -568,15 +572,15 @@ class Robot {
                 break;
         }
     }
-
-    Direction[] djikstra(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+*//*
+    Direction reversal(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
         //return a set of instructions to backtrack from point a to b 
-        //fill a queue that is just a set of instrutctions
+        //fill a queue that is just a set of instrutctions      
 
-    }
-
+    }*/
+/*
     void run() { 
-        if (!nodeMap.contains(x,y)) {
+        if (!nodeMap.contains(x,y)) {   
             addpoint();
         }
         Node* currentNode = nodeMap.get(x,y);
@@ -597,7 +601,7 @@ class Robot {
             //djikstra and backtrack
         }
         
-    }
+    }*/
 
     void printCurrentPoint() {
         readLidar();
@@ -613,7 +617,7 @@ class Robot {
     }
 
     void methodTester() {
-       
+       calibrateToWall(Direction::FRONT);
     }
 };
 

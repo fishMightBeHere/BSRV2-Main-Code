@@ -16,7 +16,7 @@ bool Dequeue<T>::add(T e) {
 }
 
 template<typename T> 
-bool Dequeue<T>::push() {
+bool Dequeue<T>::push(T e) {
     if (isFull()) return false;
 
     if (isEmpty()) {

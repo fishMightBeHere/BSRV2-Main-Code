@@ -1,11 +1,14 @@
+#pragma once
+#include "Arduino.h"
+
 template<typename T> 
 class Dequeue {
     public:
         explicit Dequeue(uint16_t maxSize) {
             _values = (T *) malloc(sizeof(T) * maxSize);
-            front = -1;
-            rear = 0;
-            size = maxSize;
+            _front = -1;
+            _rear = 0;
+            _size = maxSize;
         }
         ~Dequeue() {
             free(_values);
@@ -13,7 +16,7 @@ class Dequeue {
 
         bool add(T e);
 
-        bool push();
+        bool push(T e);
 
         T* peek();        
         
@@ -36,4 +39,4 @@ class Dequeue {
         int _size;
         int _front;
         int _rear;
-}
+};
