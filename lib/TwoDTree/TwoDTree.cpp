@@ -37,43 +37,43 @@ T* TwoDTree<T>::get(int x, int y) {
 }
 
 template<typename T>
-void TwoDTree<T>::put(T* item) {
+void TwoDTree<T>::put(T item) {
     if (_root == nullptr) {
         _root = item;
     }
 
     boolean k = true;
-    T* compareItem = _root;
+    T* compareItem = &_root;
     while (true) {
         if (k) {
-            if (comparatorX(item,compareItem) == -1 && compareItem->leftNode != nullptr) {
+            if (comparatorX(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
-                compareItem->leftNode = item;
+                compareItem->leftNode = &item;
                 _values[_putIndex] = item;
                 break;
             }
 
-            if (comparatorX(item, compareItem) != -1 && compareItem->right != nullptr) {
+            if (comparatorX(&item, compareItem) != -1 && compareItem->right != nullptr) {
                 compareItem = compareItem->right;
             } else {
-                compareItem->right = item;
+                compareItem->right = &item;
                 _values[_putIndex] = item;
                 break;
             }
         } else {
-            if (comparatorY(item,compareItem) == -1 && compareItem->leftNode != nullptr) {
+            if (comparatorY(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
-                compareItem->leftNode = item;
+                compareItem->leftNode = &item;
                 _values[_putIndex] = item;
                 break;
             }
 
-            if (comparatorY(item,compareItem) != -1 && compareItem->right != nullptr) {
+            if (comparatorY(&item,compareItem) != -1 && compareItem->right != nullptr) {
                 compareItem = compareItem->right;
             } else {
-                compareItem->right = item;
+                compareItem->right = &item;
                 _values[_putIndex] = item;
                 break;
             }
