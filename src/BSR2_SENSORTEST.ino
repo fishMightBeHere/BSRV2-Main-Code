@@ -31,9 +31,9 @@
 #include <RPLidar.h>
 #include <RunningMedian.h>
 #include <Wire.h>
-#include <TwoDTree.h>
+//#include <TwoDTree.h>
 #include "Adafruit_TSL2561_U.h"
-#include <Dequeue.h>
+//#include <Dequeue.h>
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
@@ -71,9 +71,9 @@ struct Node {
     
 };
 
-TwoDTree<Node> nodeMap(255);
+//TwoDTree<Node> nodeMap(255);
 
-Dequeue<Direction> hStack(50);
+//Dequeue<Direction> hStack(50);
 
 LidarData currentPoint;
 
@@ -194,6 +194,7 @@ class Robot {
             }
         }
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
+        //    int x = 10;
         double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
         printText(String(atan(m)*RAD_TO_DEG));
         return atan(m) * RAD_TO_DEG;
@@ -218,21 +219,21 @@ class Robot {
     void calibrateToWall(uint16_t theta1, uint16_t theta2, bool invert) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
-        int8_t m = angleToWall(theta1, theta2);
+        double m = angleToWall(theta1, theta2);
 
         if (m > 0) {
             rightMotors(10, directionInverter(Direction::FRONT, invert));
             leftMotors(10, directionInverter(Direction::BACK, invert));
             while (m >= 0) {
                 m = angleToWall(theta1, theta2);
-                printText("" + m);
+                printText(String(m));
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
             while (m <= 0) {
                 m = angleToWall(theta1, theta2);
-                printText("" + m);
+                printText(String(m));
             }
         }
         stop();
@@ -248,6 +249,8 @@ class Robot {
                 break;
             case LEFT:
                 calibrateToWall(80, 100, true); 
+                break;
+            default:
                 break;
         }
     }
@@ -524,7 +527,7 @@ class Robot {
         analogWrite(MOTOCTL, 255);
     }
     //entry point for the entire robot
-
+/*
     void addpoint() {
         Node n;
         n.x = x;
@@ -544,7 +547,7 @@ class Robot {
             n.right = true;
         }
         nodeMap.put(n);
-    }
+    }*/
 /*
     void move(Direction d) {
         //traverse the robot to the geographical direction of the maze (not relative right to the robot)
@@ -617,7 +620,10 @@ class Robot {
     }
 
     void methodTester() {
-       calibrateToWall(Direction::FRONT);
+       calibrateToWall(Direction::LEFT);
+       printText(F("done..."));
+       delay(5000);
+       printText(F("calibrating to FRONT"));
     }
 };
 

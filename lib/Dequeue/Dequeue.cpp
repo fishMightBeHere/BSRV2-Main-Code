@@ -32,12 +32,12 @@ bool Dequeue<T>::push(T e) {
 
 template<typename T>
 T* Dequeue<T>::peek() {
-    return _values[_front];
+    return &_values[_front];
 }
 
 template<typename T>
 T* Dequeue<T>::peekLast() {
-    return _values[_rear];
+    return &_values[_rear];
 }
 
 template<typename T>
@@ -50,7 +50,7 @@ T* Dequeue<T>::remove() {
     if (isFull()) _front = -1;
 
     if (_rear == _size - 1) return _values[0];
-    else return _values[_rear + 1];
+    else return &_values[_rear + 1];
 }
 
 template<typename T>
@@ -63,7 +63,7 @@ T* Dequeue<T>::pop() {
     if (isFull()) _rear = -1;
 
     if (_front == 0) return _values[_size - 1];
-    else return _values[_front - 1];
+    else return &_values[_front - 1];
 }
 
 template<typename T>

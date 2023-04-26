@@ -1,6 +1,6 @@
 #include "TwoDTree.h"
 
-template<typename T>
+template <typename T>
 T* TwoDTree<T>::get(int x, int y) {
     if (_root == nullptr) {
         return NULL;
@@ -18,8 +18,7 @@ T* TwoDTree<T>::get(int x, int y) {
                 currentItem = currentItem->leftNode;
             } else if (currentItem->rightNode != nullptr && currentItem->x >= x) {
                 currentItem = currentItem->rightNode;
-            }
-            else {
+            } else {
                 return NULL;
             }
         } else {
@@ -33,11 +32,11 @@ T* TwoDTree<T>::get(int x, int y) {
         }
         k = !k;
     }
-    
+
     return NULL;
 }
 
-template<typename T>
+template <typename T>
 void TwoDTree<T>::put(T item) {
     if (_root == nullptr) {
         _root = item;
@@ -47,12 +46,12 @@ void TwoDTree<T>::put(T item) {
     T* compareItem = &_root;
     while (true) {
         if (k) {
-            if (comparatorX(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
+            if (comparatorX(&item, compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
                 _values[_putIndex] = item;
-                compareItem->leftNode = &_values[_putIndex]; //item in parameter is stored in stack which will be destroyed, we need the pointer towards the permanent storage in _values
-                break;
+                compareItem->leftNode = &_values[_putIndex];  // item in parameter is stored in stack which will be destroyed, we need the pointer towards the permanent storage in _values
+                break; 
             }
 
             if (comparatorX(&item, compareItem) != -1 && compareItem->rightNode != nullptr) {
@@ -63,7 +62,7 @@ void TwoDTree<T>::put(T item) {
                 break;
             }
         } else {
-            if (comparatorY(&item,compareItem) == -1 && compareItem->leftNode != nullptr) {
+            if (comparatorY(&item, compareItem) == -1 && compareItem->leftNode != nullptr) {
                 compareItem = compareItem->leftNode;
             } else {
                 _values[_putIndex] = item;
@@ -71,7 +70,7 @@ void TwoDTree<T>::put(T item) {
                 break;
             }
 
-            if (comparatorY(&item,compareItem) != -1 && compareItem->rightNode != nullptr) {
+            if (comparatorY(&item, compareItem) != -1 && compareItem->rightNode != nullptr) {
                 compareItem = compareItem->rightNode;
             } else {
                 _values[_putIndex] = item;
@@ -80,24 +79,21 @@ void TwoDTree<T>::put(T item) {
             }
         }
         k = !k;
-    }        
+    }
     _putIndex++;
 }
 
-template<typename T> 
+template <typename T>
 boolean TwoDTree<T>::contains(int x, int y) {
-    return get(x,y) = NULL ? true : false;
+    return get(x, y) = NULL ? true : false;
 }
 
-
-template<typename T>
-inline
-int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
+template <typename T>
+inline int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
     return i1->x < i2->y ? -1 : 1;
 }
 
-template<typename T>
-inline
-int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
+template <typename T>
+inline int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
     return i1->y < i2->y ? -1 : 1;
 }
