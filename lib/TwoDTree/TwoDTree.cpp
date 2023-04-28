@@ -1,3 +1,4 @@
+/*
 #include "TwoDTree.h"
 
 template <typename T>
@@ -38,7 +39,7 @@ T* TwoDTree<T>::get(int x, int y) {
 
 template <typename T>
 void TwoDTree<T>::put(T item) {
-    if (_root == nullptr) {
+    if (_root == NULL) {
         _root = item;
     }
 
@@ -55,7 +56,7 @@ void TwoDTree<T>::put(T item) {
             }
 
             if (comparatorX(&item, compareItem) != -1 && compareItem->rightNode != nullptr) {
-                compareItem = compareItem->right;
+                compareItem = compareItem->rightNode;
             } else {
                 _values[_putIndex] = item;
                 compareItem->rightNode = &_values[_putIndex];
@@ -89,11 +90,11 @@ boolean TwoDTree<T>::contains(int x, int y) {
 }
 
 template <typename T>
-inline int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
+int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
     return i1->x < i2->y ? -1 : 1;
 }
 
 template <typename T>
-inline int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
+int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
     return i1->y < i2->y ? -1 : 1;
-}
+}*/
