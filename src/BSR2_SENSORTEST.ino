@@ -4,7 +4,6 @@
       test medkit dispenser and blink
       live memory performance testing
       add code for multiple layered mazes
-      rewrite 2dt to use copilation alocated memory, not dynamic idk why dynamic is causing segfaults
 
     CODE:
       clean up code and remove deprecated stuff
@@ -224,14 +223,14 @@ class Robot {
         if (m > 0) {
             rightMotors(10, directionInverter(Direction::FRONT, invert));
             leftMotors(10, directionInverter(Direction::BACK, invert));
-            while (m >= 0) {
+            while (m >= 10) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
-            while (m <= 0) {
+            while (m <= -10) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
@@ -626,7 +625,13 @@ class Robot {
         n.down = false;
         n.up = false;
         nodeMap.put(n);
-        
+        if (nodeMap.contains(0,0)) {
+            printText(F("nodemap worked"));
+        } else {
+            printText(F("the thing failed"));
+        }
+        delay(10000);
+        printText(F("testing"));        
     }
 };
 

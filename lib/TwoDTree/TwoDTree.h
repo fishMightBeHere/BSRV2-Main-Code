@@ -48,7 +48,7 @@ T* TwoDTree<T>::get(int x, int y) {
             if (currentItem->leftNode != nullptr && currentItem->y < y) {
                 currentItem = currentItem->leftNode;
             } else if (currentItem->rightNode != nullptr && currentItem->y >= y) {
-                currentItem = currentItem->right;
+                currentItem = currentItem->rightNode;
             } else {
                 return NULL;
             }
@@ -109,7 +109,7 @@ void TwoDTree<T>::put(T item) {
 
 template <typename T>
 boolean TwoDTree<T>::contains(int x, int y) {
-    return get(x, y) = NULL ? true : false;
+    return get(x, y) == NULL ? true : false;
 }
 
 template <typename T>

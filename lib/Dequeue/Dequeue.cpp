@@ -1,3 +1,4 @@
+/*
 #include "Dequeue.h"
 
 template<typename T> 
@@ -87,4 +88,4 @@ template<typename T>
 void Dequeue<T>::clear() {
     _front = -1;
     _rear = -1;
-}
+}*/
