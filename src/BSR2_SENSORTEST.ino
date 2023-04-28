@@ -615,21 +615,17 @@ class Robot {
     }
 
     void methodTester() {
-        Node n;
-        n.x = 0;
-        n.y = 0;
-        n.leftNode = NULL;
-        n.rightNode = NULL;
-        n.left = false;
-        n.right = false;
-        n.down = false;
-        n.up = false;
-        nodeMap.put(n);
-        if (nodeMap.contains(0,0)) {
+        nodeMap.put({0,0,NULL,NULL,false,false,false,false});
+        nodeMap.put({0,1,NULL,NULL,false,false,false,false});
+        nodeMap.put({1,1,NULL,NULL,false,false,false,false});
+        nodeMap.put({1,0,NULL,NULL,false,false,false,false});
+        if (nodeMap.contains(0,0) && nodeMap.contains(0,1) && nodeMap.contains(1,1) && nodeMap.contains(1,0)) {
             printText(F("nodemap worked"));
         } else {
             printText(F("the thing failed"));
         }
+        delay(1000);
+        display.clearDisplay();
         delay(10000);
         printText(F("testing"));        
     }
