@@ -30,7 +30,7 @@ T* TwoDTree<T>::get(int x, int y) {
     }
 
     T* currentItem = _root;
-    bool k = false;
+    bool k = true;
     while (true) {
         if (currentItem->x == x && currentItem->y == y) {
             return currentItem;

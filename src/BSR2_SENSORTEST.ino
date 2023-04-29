@@ -194,7 +194,7 @@ class Robot {
         }
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
         //    int x = 10;
-        double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
+        //double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
         printText(String(atan(m) * RAD_TO_DEG));
         return atan(m) * RAD_TO_DEG;
     }
@@ -615,19 +615,19 @@ class Robot {
     }
 
     void methodTester() {
+        printText(F("testing"));
+        delay(1000);
         nodeMap.put({0,0,NULL,NULL,false,false,false,false});
         nodeMap.put({0,1,NULL,NULL,false,false,false,false});
         nodeMap.put({1,1,NULL,NULL,false,false,false,false});
         nodeMap.put({1,0,NULL,NULL,false,false,false,false});
         if (nodeMap.contains(0,0) && nodeMap.contains(0,1) && nodeMap.contains(1,1) && nodeMap.contains(1,0)) {
             printText(F("nodemap worked"));
+            while (1);
         } else {
             printText(F("the thing failed"));
+            while (1);
         }
-        delay(1000);
-        display.clearDisplay();
-        delay(10000);
-        printText(F("testing"));        
     }
 };
 
