@@ -19,8 +19,8 @@ class TwoDTree {
     uint16_t _putIndex = 0;
     T* _values;
 
-    int8_t comparatorX(T* i1, T* i2);
-    int8_t comparatorY(T* i1, T* i2);
+    inline int8_t comparatorX(T* i1, T* i2);
+    inline int8_t comparatorY(T* i1, T* i2);
 };
 
 template <typename T>
@@ -37,17 +37,17 @@ T* TwoDTree<T>::get(int x, int y) {
         }
 
         if (k) {
-            if (currentItem->leftNode != nullptr && currentItem->x < x) {
+            if (currentItem->leftNode != nullptr && x < currentItem->x) {
                 currentItem = currentItem->leftNode;
-            } else if (currentItem->rightNode != nullptr && currentItem->x >= x) {
+            } else if (currentItem->rightNode != nullptr && x >= currentITem->x) {
                 currentItem = currentItem->rightNode;
             } else {
                 return NULL;
             }
         } else {
-            if (currentItem->leftNode != nullptr && currentItem->y < y) {
+            if (currentItem->leftNode != nullptr && y < currentItem->y) {
                 currentItem = currentItem->leftNode;
-            } else if (currentItem->rightNode != nullptr && currentItem->y >= y) {
+            } else if (currentItem->rightNode != nullptr && y >= currentItem->y) {
                 currentItem = currentItem->rightNode;
             } else {
                 return NULL;
@@ -117,11 +117,11 @@ boolean TwoDTree<T>::contains(int x, int y) {
 }
 
 template <typename T>
-int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
+inline int8_t TwoDTree<T>::comparatorX(T* i1, T* i2) {
     return i1->x < i2->x ? -1 : 1;
 }
 
 template <typename T>
-int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
+inline int8_t TwoDTree<T>::comparatorY(T* i1, T* i2) {
     return i1->y < i2->y ? -1 : 1;
 }
