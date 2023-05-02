@@ -1,5 +1,5 @@
 /*
-    4/29/2023
+    5/1/2023
 
   TODO:
     TESTS:
@@ -31,13 +31,13 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_VL6180X.h>
 #include <Arduino.h>
+#include <Dequeue.h>
 #include <RPLidar.h>
 #include <RunningMedian.h>
 #include <TwoDTree.h>
 #include <Wire.h>
 
 #include "Adafruit_TSL2561_U.h"
-// #include <Dequeue.h>
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 
@@ -76,7 +76,7 @@ struct Node {
 
 TwoDTree<Node> nodeMap(255);
 
-// Dequeue<Direction> hStack(50);
+Dequeue<Direction> hStack(50);
 
 LidarData currentPoint;
 
@@ -90,6 +90,7 @@ Adafruit_VL6180X tofLeft;   // connected to sd sc 0
 
 Adafruit_TSL2561_Unified luxSensor = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);  // connected to sd sc 4
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
+
 float pointMemory[3600];
 
 class Robot {
@@ -196,7 +197,7 @@ class Robot {
         }
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
         //    int x = 10;
-        //double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
+        // double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
         printText(String(atan(m) * RAD_TO_DEG));
         return atan(m) * RAD_TO_DEG;
     }
@@ -524,84 +525,126 @@ class Robot {
         analogWrite(MOTOCTL, 255);
     }
     // entry point for the entire robot
-    /*
-        void addpoint() {
-            Node n;
-            n.x = x;
-            n.y = y;
-            n.leftNode = NULL;
-            n.rightNode = NULL;
-            if (readVl(Direction::BACK) < 100) {
-                n.down = true;
-            }
-            if (readVl(Direction::LEFT) < 100) {
-                n.left = true;
-            }
-            if (readVl(Direction::FRONT) < 100) {
-                n.up = true;
-            }
-            if (readVl(Direction::RIGHT) < 100) {
-                n.right = true;
-            }
-            nodeMap.put(n);
-        }*/
-    /*
-        void move(Direction d) {
-            //traverse the robot to the geographical direction of the maze (not relative right to the robot)
-            // f r b l
-            for (uint8_t i = 0; i<abs(d-currentDirection)<=2 ? i : 4-i; i++) {
-                turn90DegRight(abs(d-currentDirection) <=2 ? false : true);
-            }
-            currentDirection = d;
 
-            travel30cm();
+    void addpoint() {
+        Node n;
+        n.x = x;
+        n.y = y;
+        n.leftNode = NULL;
+        n.rightNode = NULL;
+        n.down = readVl(Direction::BACK) < 100 ? true : false;
+        n.left = readVl(Direction::LEFT) < 100 ? true : false;
+        n.up = readVl(Direction::FRONT) < 100 ? true : false;
+        n.right = readVl(Direction::RIGHT) < 100 ? true : false;
+        nodeMap.put(n);
+    }
 
-            //update position in memeory
-            switch (d) {
-                case FRONT:
-                    y++;
-                    break;
-                case RIGHT:
-                    x++;
-                    break;
-                case BACK:
-                    y--;
-                    break;
-                case LEFT:
-                    x--;
-                    break;
+    void move(Direction d) {
+        // traverse the robot to the geographical direction of the maze (not relative right to the robot)
+        //  f r b l
+        //  0 1 2 3
+
+        // calculate the amount of turns to take and in which direction
+        int k = 0;
+        bool tD = false;
+        if (d - currentDirection == -1 || d - currentDirection == -3) {
+            // turn right once
+            k = 1;
+        } else if (abs(d - currentDirection) == 2) {
+            k = 2;
+        } else if (d - currentDirection == 1 || d - currentDirection == 3) {
+            // turn left once
+            k = 1;
+            tD = true;
+        }
+
+        for (uint8_t i = 0; i < k; i++) {
+            turn90DegRight(tD);
+        }
+        currentDirection = d;
+
+        travel30cm();
+
+        // update position in memeory
+        switch (d) {
+            case FRONT:
+                y++;
+                break;
+            case RIGHT:
+                x++;
+                break;
+            case BACK:
+                y--;
+                break;
+            case LEFT:
+                x--;
+                break;
+        }
+    }
+    
+    Direction reversal(int16_t xG, int16_t yG) {
+        //calculate and execute shortest path to target through stack
+        Direction dT[50];
+        uint16_t dTI = 0;
+        int16_t xT = x;
+        int16_t yT = y;
+
+        Direction opDir = *hStack.peekLast();
+        while (hStack.size() > 0) {
+            Direction frame = hStack.pop();
+            //if we find our target square
+            if (xT = xG && yT = yG) {
+                break;
+            }
+
+            if (frame == Direction::FRONT) {
+                yT++;
+            } else if (frame == Direction::RIGHT) {
+                xT++;
+            } else if (frame == Direction::BACK) {
+                yT--;
+            } else if (frame == Direction::LEFT) {
+                xT--;
+            }
+
+            //if predicted position is adjacent to initial position, set opdir to proper direction
+            if (xT+1 = x) {
+                opDir = Direction::left;
+            } else if (yT + 1 = y) {
+                opDir = Direction::BACK;
+            } else if (xT-1 = x) {
+                opDir = Direction::RIGHT;
+            } else if (yT-1 = y) {
+                opDir = Direction::FRONT;
             }
         }
-    *//*
-    Direction reversal(int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
-        //return a set of instructions to backtrack from point a to b 
-        //fill a queue that is just a set of instrutctions      
 
-    }*/
-    /*
-        void run() {
-            if (!nodeMap.contains(x,y)) {
-                addpoint();
-            }
-            Node* currentNode = nodeMap.get(x,y);
+        //run queued actions
 
-            if (currentNode->right == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::RIGHT) {
-                hStack.push(Direction::RIGHT);
-                move(Direction::RIGHT);
-            } else if (currentNode->down == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::BACK) {
-                hStack.push(Direction::BACK);
-                move(Direction::BACK);
-            } else if (currentNode->left == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::LEFT) {
-                hStack.push(Direction::LEFT);
-                move(Direction::LEFT);
-            } else if (currentNode->up == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::FRONT) {
-                hStack.push(Direction::FRONT);
-                move(Direction::FRONT);
-            } else {
-                //djikstra and backtrack
-            }
+    }
 
-        }*/
+    void run() {
+        if (!nodeMap.contains(x, y)) {
+            addpoint();
+        }
+        Node* currentNode = nodeMap.get(x, y);
+
+        if (currentNode->right == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::RIGHT) {
+            hStack.push(Direction::RIGHT);
+            move(Direction::RIGHT);
+        } else if (currentNode->down == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::BACK) {
+            hStack.push(Direction::BACK);
+            move(Direction::BACK);
+        } else if (currentNode->left == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::LEFT) {
+            hStack.push(Direction::LEFT);
+            move(Direction::LEFT);
+        } else if (currentNode->up == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::FRONT) {
+            hStack.push(Direction::FRONT);
+            move(Direction::FRONT);
+        } else {
+            // djikstra and backtrack
+        }
+    }
 
     void printCurrentPoint() {
         readLidar();
@@ -617,18 +660,44 @@ class Robot {
     }
 
     void methodTester() {
-        printText(F("testing"));
+        printText(F("cam 1"));
+        travel30cm();
+        travel30cm();
+        turn90DegRight(false);
+        travel30cm();
+        travel30cm();
         delay(1000);
-        nodeMap.put({0,0,NULL,NULL,false,false,false,false});
-        nodeMap.put({0,1,NULL,NULL,false,false,false,false});
-        nodeMap.put({1,1,NULL,NULL,false,false,false,false});
-        nodeMap.put({1,0,NULL,NULL,false,false,false,false});
-        if (nodeMap.contains(0,0) && nodeMap.contains(0,1) && nodeMap.contains(1,1) && nodeMap.contains(1,0)) {
-            printText(F("nodemap worked"));
-            while (1);
+        printText(F("cam2"));
+        travel30cm();
+        travel30cm();
+        turn90DegRight(true);
+        travel30cm();
+        travel30cm();
+    }
+
+    void stackTester() {
+        hStack.push(Direction::FRONT);
+        hStack.push(Direction::RIGHT);
+        hStack.push(Direction::BACK);
+        if (*(hStack.pop()) == 2 && *(hStack.pop()) == 1 && *(hStack.pop()) == 0) {
+            printText(F("stack pop push works"));
+            delay(5000);
         } else {
-            printText(F("the thing failed"));
-            while (1);
+            printText(F("stack did not work"));
+            while (1)
+                ;
+        }
+
+        hStack.add(Direction::FRONT);
+        hStack.add(Direction::RIGHT);
+        hStack.add(Direction::BACK);
+        if (*(hStack.remove()) == 0 && *(hStack.remove()) == 1 && *(hStack.remove()) == 2) {
+            printText(F("stack add remove works"));
+            delay(5000);
+        } else {
+            printText(F("queue did not work"));
+            while (1)
+                ;
         }
     }
 };
@@ -637,4 +706,4 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() { robot.methodTester(); }
+void loop() { robot.stackTester(); }

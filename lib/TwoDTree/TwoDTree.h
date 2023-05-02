@@ -39,7 +39,7 @@ T* TwoDTree<T>::get(int x, int y) {
         if (k) {
             if (currentItem->leftNode != nullptr && x < currentItem->x) {
                 currentItem = currentItem->leftNode;
-            } else if (currentItem->rightNode != nullptr && x >= currentITem->x) {
+            } else if (currentItem->rightNode != nullptr && x >= currentItem->x) {
                 currentItem = currentItem->rightNode;
             } else {
                 return NULL;
