@@ -1,28 +1,22 @@
 /*
-    5/1/2023
+    5/4/2023
 
   TODO:
     TESTS:
       test medkit dispenser and blink
       live memory performance testing
-      add code for multiple layered mazes
+      **add code for multiple layered mazes
 
     CODE:
       clean up code and remove deprecated stuff
       train pi with data
-      find implementations for linear estimate
       create a function that can detect intersections and angles, we need this
   to know the input theta values for align to wall
-      add method to turn exactly 90 deg
         add functionality for 360 deg wraparound and calibrate to back
-        implement a kdtree to store nodes
 
-
-      reduce floating point math to reduce errer, might be overkill
+        calculate target reversal node in move()
 
     HARDWARE:
-      redesign wheels
-      make maze
       build communication between pi and nano
 
 */
@@ -76,7 +70,7 @@ struct Node {
 
 TwoDTree<Node> nodeMap(255);
 
-Dequeue<Direction> hStack(50);
+Dequeue<Node> hStack(50);
 
 LidarData currentPoint;
 
@@ -582,45 +576,50 @@ class Robot {
         }
     }
     
-    Direction reversal(int16_t xG, int16_t yG) {
+    void reversal(int16_t xG, int16_t yG) {
         //calculate and execute shortest path to target through stack
-        Direction dT[50];
-        uint16_t dTI = 0;
-        int16_t xT = x;
-        int16_t yT = y;
 
-        Direction opDir = *hStack.peekLast();
-        while (hStack.size() > 0) {
-            Direction frame = hStack.pop();
-            //if we find our target square
-            if (xT = xG && yT = yG) {
-                break;
+        /*
+            fill in temporary storage array with full stack reversal then calculate shortcuts
+        */
+        Node* nT[50];
+        uint8_t id = 0;
+
+        Node* shortcut = hStack.peekLast();
+
+        Node* nC = hStack.peekLast();
+
+        do {
+            nC = hStack.pop();
+            
+            nT[id] = nC;
+            id++;
+            //check optimal node to start off
+            if ((nC->y == y && nC->x == x+1) || (nC-> y == y && nC->x == x-1) || (nC->x == x && nC->y == y+1) || (nC->x == x && nC->y == y-1)) { 
+                shortcut = nC;
             }
 
-            if (frame == Direction::FRONT) {
-                yT++;
-            } else if (frame == Direction::RIGHT) {
-                xT++;
-            } else if (frame == Direction::BACK) {
-                yT--;
-            } else if (frame == Direction::LEFT) {
-                xT--;
-            }
+        }  while (hStack.size() > 0 || (nC->x == xG && nC->y == yG));
+        
+        hStack.push(*nT[id-1]); //this is to update the stack so it actually registers the target square
+        
+        bool trg = true;
+        for (uint8_t i = 0; i<id; i++) {
+            if (trg && nT[i] != shortcut) {
+                continue;
+            } 
+            trg = false;
 
-            //if predicted position is adjacent to initial position, set opdir to proper direction
-            if (xT+1 = x) {
-                opDir = Direction::left;
-            } else if (yT + 1 = y) {
-                opDir = Direction::BACK;
-            } else if (xT-1 = x) {
-                opDir = Direction::RIGHT;
-            } else if (yT-1 = y) {
-                opDir = Direction::FRONT;
+            if (y == nT[i]->y && x+1 == nT[i]->x) {
+                move(Direction::RIGHT);
+            } else if (y == nT[i]->y && x-1 ==nT[i]->x) {
+                move(Direction::LEFT);
+            } else if (x == nT[i]->x && y+1 == nT[i]->y) {
+                move(Direction::FRONT);
+            } else if (x == nT[i]->x && y-1 == nT[i]->y) {
+                move(Direction::BACK);
             }
         }
-
-        //run queued actions
-
     }
 
     void run() {
@@ -629,20 +628,21 @@ class Robot {
         }
         Node* currentNode = nodeMap.get(x, y);
 
-        if (currentNode->right == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::RIGHT) {
-            hStack.push(Direction::RIGHT);
+        if (currentNode->right == true && hStack.size() > 0 && !nodeMap.contains(x+1,y)) {
             move(Direction::RIGHT);
-        } else if (currentNode->down == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::BACK) {
-            hStack.push(Direction::BACK);
+            hStack.push(*nodeMap.get(x,y));
+        } else if (currentNode->down == true && hStack.size() > 0 && !nodeMap.contains(x,y-1)) {
             move(Direction::BACK);
-        } else if (currentNode->left == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::LEFT) {
-            hStack.push(Direction::LEFT);
+            hStack.push(*nodeMap.get(x,y));
+        } else if (currentNode->left == true && hStack.size() > 0 && !nodeMap.contains(x-1,y)) {
             move(Direction::LEFT);
-        } else if (currentNode->up == true && hStack.size() > 0 && *(hStack.peekLast()) != Direction::FRONT) {
-            hStack.push(Direction::FRONT);
+            hStack.push(*nodeMap.get(x,y));
+        } else if (currentNode->up == true && hStack.size() > 0 && !nodeMap.contains(x,y+1)) {
             move(Direction::FRONT);
+            hStack.push(*nodeMap.get(x,y));
         } else {
-            // djikstra and backtrack
+            //calculate target node
+            //reversal()
         }
     }
 
@@ -676,10 +676,14 @@ class Robot {
     }
 
     void stackTester() {
-        hStack.push(Direction::FRONT);
-        hStack.push(Direction::RIGHT);
-        hStack.push(Direction::BACK);
-        if (*(hStack.pop()) == 2 && *(hStack.pop()) == 1 && *(hStack.pop()) == 0) {
+        Node a = {0,0,0,0,0,0,0,0};
+        Node b = {0,1,0,0,0,0,0,0};
+        Node c = {1,1,0,0,0,0,0,0};
+
+        hStack.push(a);
+        hStack.push(b);
+        hStack.push(c);
+        if (hStack.pop() == &c && hStack.pop() == &b && hStack.pop() == &a) {
             printText(F("stack pop push works"));
             delay(5000);
         } else {
@@ -688,10 +692,10 @@ class Robot {
                 ;
         }
 
-        hStack.add(Direction::FRONT);
-        hStack.add(Direction::RIGHT);
-        hStack.add(Direction::BACK);
-        if (*(hStack.remove()) == 0 && *(hStack.remove()) == 1 && *(hStack.remove()) == 2) {
+        hStack.add(a);
+        hStack.add(b);
+        hStack.add(c);
+        if (hStack.remove() == &a && hStack.remove() == &b && hStack.remove() == &c) {
             printText(F("stack add remove works"));
             delay(5000);
         } else {
