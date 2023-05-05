@@ -215,19 +215,20 @@ class Robot {
     void calibrateToWall(uint16_t theta1, uint16_t theta2, bool invert) {
         // will adjust robot position to be as parellel to wall whichever angle is
         // closer, 0 or 90
+        stop();
         double m = angleToWall(theta1, theta2);
 
         if (m > 0) {
             rightMotors(10, directionInverter(Direction::FRONT, invert));
             leftMotors(10, directionInverter(Direction::BACK, invert));
-            while (m >= 10) {
+            while (m >= 5) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
-            while (m <= -10) {
+            while (m <= -5) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
@@ -576,7 +577,7 @@ class Robot {
         }
     }
     
-    void reversal(int16_t xG, int16_t yG) {
+    void reversal() {
         //calculate and execute shortest path to target through stack
 
         /*
@@ -599,7 +600,7 @@ class Robot {
                 shortcut = nC;
             }
 
-        }  while (hStack.size() > 0 || (nC->x == xG && nC->y == yG));
+        }  while (hStack.size() > 0 && (!nodeMap.contains(nC->x + 1,nC->y) || !nodeMap.contains(nC->x -1, nC->y || !nodeMap.contains(nC->x,nC->y + 1) || !nodeMap.contains(nC->x,nC->y -1))));
         
         hStack.push(*nT[id-1]); //this is to update the stack so it actually registers the target square
         
@@ -641,8 +642,7 @@ class Robot {
             move(Direction::FRONT);
             hStack.push(*nodeMap.get(x,y));
         } else {
-            //calculate target node
-            //reversal()
+            reversal();
         }
     }
 
@@ -660,49 +660,8 @@ class Robot {
     }
 
     void methodTester() {
-        printText(F("cam 1"));
-        travel30cm();
-        travel30cm();
         turn90DegRight(false);
-        travel30cm();
-        travel30cm();
-        delay(1000);
-        printText(F("cam2"));
-        travel30cm();
-        travel30cm();
-        turn90DegRight(true);
-        travel30cm();
-        travel30cm();
-    }
-
-    void stackTester() {
-        Node a = {0,0,0,0,0,0,0,0};
-        Node b = {0,1,0,0,0,0,0,0};
-        Node c = {1,1,0,0,0,0,0,0};
-
-        hStack.push(a);
-        hStack.push(b);
-        hStack.push(c);
-        if (hStack.pop() == &c && hStack.pop() == &b && hStack.pop() == &a) {
-            printText(F("stack pop push works"));
-            delay(5000);
-        } else {
-            printText(F("stack did not work"));
-            while (1)
-                ;
-        }
-
-        hStack.add(a);
-        hStack.add(b);
-        hStack.add(c);
-        if (hStack.remove() == &a && hStack.remove() == &b && hStack.remove() == &c) {
-            printText(F("stack add remove works"));
-            delay(5000);
-        } else {
-            printText(F("queue did not work"));
-            while (1)
-                ;
-        }
+        delay(10000);
     }
 };
 
@@ -710,4 +669,4 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() { robot.stackTester(); }
+void loop() {robot.methodTester();  }

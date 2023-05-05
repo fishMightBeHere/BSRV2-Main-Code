@@ -82,7 +82,7 @@ T* Dequeue<T>::peekLast() {
 }
 
 template <typename T>
-T* Dequeue<T>::remove() {
+T* Dequeue<T>::pop() {
     if (isEmpty()) return NULL;
 
     if (_rear == 0)
@@ -99,7 +99,7 @@ T* Dequeue<T>::remove() {
 }
 
 template <typename T>
-T* Dequeue<T>::pop() {
+T* Dequeue<T>::remove() {
     if (isEmpty()) return NULL;
 
     if (_front == _size - 1)
