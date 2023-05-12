@@ -10,14 +10,15 @@
     CODE:
       clean up code and remove deprecated stuff
       train pi with data
-      create a function that can detect intersections and angles, we need this
-  to know the input theta values for align to wall
-        add functionality for 360 deg wraparound and calibrate to back
 
-        calculate target reversal node in move()
+      black tile logic
+
+      add functionality for 360 deg wraparound and calibrate to back
+        if not possible, set turn time to be as close to 90 deg as possible so that in the case of entering a t intersection and turning right, the robot will not brick itself
 
     HARDWARE:
       build communication between pi and nano
+      leds
 
 */
 
@@ -30,7 +31,7 @@
 #include <RunningMedian.h>
 #include <TwoDTree.h>
 #include <Wire.h>
-
+#include <Adafruit_LSM9DS1.h>
 #include "Adafruit_TSL2561_U.h"
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -56,26 +57,28 @@ struct LidarData {
 };
 
 struct Node {
+    Node* leftNode;//for some reason the size of a node will actually reduce when we put the pointers in the node first
+    Node* rightNode;
     int8_t x;
     int8_t y;
-    Node* leftNode;
-    Node* rightNode;
-
-    // these are bools confirming connectivity with the 4 possible geometrically adjacent nodes, we can then calculate each adjacent node's coordinates
+    
+    // these are bools confirming connectivity with the 4 possible geometrically adjacent nodes, we can then calculate each adjacent node's coordinates 
     bool up : 1;
     bool down : 1;
     bool left : 1;
     bool right : 1;
 };
 
-TwoDTree<Node> nodeMap(255);
-
+TwoDTree<Node> nodeMap(50);
+//TwoDTree<Node> floorTwo(15);
 Dequeue<Node> hStack(50);
-
+//Dequeue<Node> floorTwoStack(15);
 LidarData currentPoint;
 
 byte rightMotorSpeed;
 byte leftMotorSpeed;
+
+Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1();
 
 Adafruit_VL6180X tofFront;  // connected to sd sc 3
 Adafruit_VL6180X tofRight;  // connected to sd sc 2
@@ -91,12 +94,14 @@ class Robot {
    private:
     RPLidar lidar;
 
-    uint16_t e = 0;  // error
+    uint32_t e = 0;  // error
     uint16_t previousAngle = 0;
 
     int8_t x = 0;
     int8_t y = 0;
     Direction currentDirection = FRONT;
+
+    //const float LUX_CONSTANT;
 
     void TCA(uint8_t bus) {
         Wire.beginTransmission(0x70);
@@ -160,7 +165,7 @@ class Robot {
         // does not work based on start bit due to start bit not necessarily indicating a new rotation
 
         // clear current pointcloud
-        memset(pointMemory, 0, 3600);
+        memset(pointMemory, 0, sizeof(pointMemory));
         uint16_t i = 0;
         while (i < n) {
             if (readLidar()) {
@@ -272,8 +277,6 @@ class Robot {
         // filter out qualities that are not 15
         // filter out changes in angle that are greater than s deg
 
-        // i realize that this will not work without some dumb variable scope magic
-
         if (d.quality == 15 && d.distance < 6000 && d.distance > 150 && (d.distance < 3900 || d.distance > 4100) && (d.angle < 123 || d.angle > 125)) {
             if (d.angle < 360 && angleDistance(previousAngle, d.angle) < stde + e) {  // make sure that the angle can never be above 360 or else program dies
                 pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
@@ -283,6 +286,10 @@ class Robot {
         } else
             e += stde;
 
+        //possible place for integer overflow, if e gets too big, set it back to 0
+        if (e > 300000) {
+            e = 0;
+        }
         pointMemory[(uint16_t)(d.angle * 10)] = 0;
         return false;
     }
@@ -321,6 +328,8 @@ class Robot {
         } else {
             analogWrite(MOTOCTL, 0);  // stop the rplidar motor
 
+            printText(F("lost connection to lidar"));
+            delay(1000);
             // try to detect RPLIDAR...
             rplidar_response_device_info_t info;
             if (IS_OK(lidar.getDeviceInfo(info, 100))) {
@@ -348,7 +357,7 @@ class Robot {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
 
-        RunningMedian r = RunningMedian(abs(theta2 * 10 - theta1 * 10));
+        RunningMedian r = RunningMedian(abs(theta2 * 10 - theta1 * 10)); //max size of median is 255 we are setting this usually of size 200 //allocates total of 1kb of ram
 
         for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
@@ -362,31 +371,43 @@ class Robot {
         return r.getMedian();
     }
 
-    void travel30cm() {
-        // this method could be important
+    boolean travel30cm() {
         // also need logic to determine which area to scan from, front or back.
         // possibly keep track of distance change in both directions average
         // distance should add some level of noiseproofing to measurements, we could
         // use median to be even more resistant to outliers
 
-        // this probably is very slow and inefficient
-        fullScan(600);
-        uint16_t di = medianDistance(170, 190);  // because these are the degrees of north i think
+        sensors_event_t lux;
+
+        fullScan(300);
+        uint16_t di = medianDistance(170, 190);  // initial distance
         while (di == 0) {
-            fullScan(600);
+            fullScan(300);
             di = medianDistance(170, 190);
         }
         uint16_t dt = di;
         while (abs(dt - di) < 300) {
-            rightMotors(10, Direction::FRONT);
-            leftMotors(10, Direction::FRONT);
-            do {
-                fullScan(600);
-                dt = medianDistance(170, 190);
-                printText(String(di) + "\n" + String(dt) + "\n" + String(dt - di));
-            } while (dt == 0);
+            rightMotors(15, Direction::FRONT);
+            leftMotors(15, Direction::FRONT);
+            fullScan(300);
+            dt = medianDistance(170, 190);
+
+            //luxSensor.getEvent(&lux);
+            /*if (lux.light > LUX_CONSTANT) { // set the point attempted to traverse to direction as false and then reverses to origional position
+                while (dt > di) {
+                    dt = medianDistance(170,190);
+                    rightMotors(10,Direction::BACK);
+                    rightMotors(10,Direction::BACK);
+                }
+                stop();
+                return false;
+            }*/
+
+            printText("change in d: " + String(abs(dt - di)));
+
         }
         stop();
+        return true;
     }
 
     void turn90DegRight(boolean invert) {
@@ -410,18 +431,18 @@ class Robot {
             delay(2000);
             fullScan(400);
             calibrateToWall(Direction::LEFT);
-        }
+        } 
         stop();
     }
 
     void rightMotors(uint8_t speed, Direction d) {
         rightMotorSpeed = speed;
         switch (d) {
-            case FRONT:
+            case BACK:
                 analogWrite(EN1, speed);
                 digitalWrite(PH1, HIGH);
                 break;
-            case BACK:
+            case FRONT:
                 analogWrite(EN1, speed);
                 digitalWrite(PH1, LOW);
                 break;
@@ -434,11 +455,11 @@ class Robot {
     void leftMotors(uint8_t speed, Direction d) {
         leftMotorSpeed = speed;
         switch (d) {
-            case FRONT:
+            case BACK:
                 analogWrite(EN2, speed);
                 digitalWrite(PH2, HIGH);
                 break;
-            case BACK:
+            case FRONT:
                 analogWrite(EN2, speed);
                 digitalWrite(PH2, LOW);
                 break;
@@ -446,6 +467,14 @@ class Robot {
                 stop();
                 break;
         }
+    }
+
+    float pitch() {
+        imu.read(); 
+        sensors_event_t a, m, g, temp;
+
+        imu.getEvent(&a, &m, &g, &temp); 
+        return (180 * atan2(a.acceleration.x, sqrt(a.acceleration.y*a.acceleration.y + a.acceleration.z*a.acceleration.z))) / PI;
     }
 
    public:
@@ -504,7 +533,17 @@ class Robot {
             while (1)
                 ;
         }
-        printText(F("luxSensor ok"));
+        //sensors_event_t event;
+        //luxSensor.getEvent(&event);
+        //LUX_CONSTANT = event.light;
+
+        //printText(F("luxSensor ok"));
+/*
+        if (!imu.begin()) {
+            printText(F("imu failed"));
+            while(1);
+        }
+        printText(F("imu ok"));*/
 
         pinMode(EN1, OUTPUT);
         pinMode(PH1, OUTPUT);
@@ -518,6 +557,10 @@ class Robot {
 
         pinMode(MOTOCTL, OUTPUT);
         analogWrite(MOTOCTL, 255);
+
+        //push strartpoint into stack and nodeMap
+        addpoint();
+        hStack.push(*nodeMap.get(x,y));
     }
     // entry point for the entire robot
 
@@ -527,10 +570,10 @@ class Robot {
         n.y = y;
         n.leftNode = NULL;
         n.rightNode = NULL;
-        n.down = readVl(Direction::BACK) < 100 ? true : false;
-        n.left = readVl(Direction::LEFT) < 100 ? true : false;
-        n.up = readVl(Direction::FRONT) < 100 ? true : false;
-        n.right = readVl(Direction::RIGHT) < 100 ? true : false;
+        n.down = readVl(Direction::BACK) > 150 ? true : false;
+        n.left = readVl(Direction::LEFT) > 140 ? true : false;
+        n.up = readVl(Direction::FRONT) > 150 ? true : false;
+        n.right = readVl(Direction::RIGHT) > 150 ? true : false;
         nodeMap.put(n);
     }
 
@@ -580,9 +623,7 @@ class Robot {
     void reversal() {
         //calculate and execute shortest path to target through stack
 
-        /*
-            fill in temporary storage array with full stack reversal then calculate shortcuts
-        */
+        // fill in temporary storage array with full stack reversal then calculate shortcuts
         Node* nT[50];
         uint8_t id = 0;
 
@@ -599,9 +640,15 @@ class Robot {
             if ((nC->y == y && nC->x == x+1) || (nC-> y == y && nC->x == x-1) || (nC->x == x && nC->y == y+1) || (nC->x == x && nC->y == y-1)) { 
                 shortcut = nC;
             }
-
-        }  while (hStack.size() > 0 && (!nodeMap.contains(nC->x + 1,nC->y) || !nodeMap.contains(nC->x -1, nC->y || !nodeMap.contains(nC->x,nC->y + 1) || !nodeMap.contains(nC->x,nC->y -1))));
+        //goofy conditional -> loop while nc adjacent node does not exist and that node would be accesible from nc
+        // stop when we have an adjacent node that has not been explored and is accesible from nc
+        } while (hStack.size() > 0 && !((!nodeMap.contains(nC->x + 1,nC->y) && nC->right) || (!nodeMap.contains(nC->x -1, nC->y) && nC->left) || (!nodeMap.contains(nC->x,nC->y + 1) && nC->up) || (!nodeMap.contains(nC->x,nC->y -1) && nC->down)));
         
+        printText(String(id-1) + "items in nT");
+        delay(1000);
+        printText("shortcut :" + String(shortcut->x) + ", " + String(shortcut->y));
+        delay(3000);
+
         hStack.push(*nT[id-1]); //this is to update the stack so it actually registers the target square
         
         bool trg = true;
@@ -624,39 +671,44 @@ class Robot {
     }
 
     void run() {
+        printText(F("iterating"));
+        delay(1000);
         if (!nodeMap.contains(x, y)) {
             addpoint();
-        }
+            printText("point added!" + String(x) + " " + String(y));
+            delay(1000);
+        }  
+
         Node* currentNode = nodeMap.get(x, y);
 
-        if (currentNode->right == true && hStack.size() > 0 && !nodeMap.contains(x+1,y)) {
+        if (currentNode->right && !nodeMap.contains(x+1,y)) {
+            printText(F("moving absolute right"));
+            delay(1000);
             move(Direction::RIGHT);
             hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->down == true && hStack.size() > 0 && !nodeMap.contains(x,y-1)) {
+        } else if (currentNode->down && !nodeMap.contains(x,y-1)) {
+            printText(F("moving absolute back"));
+            delay(1000);
             move(Direction::BACK);
             hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->left == true && hStack.size() > 0 && !nodeMap.contains(x-1,y)) {
+        } else if (currentNode->left && !nodeMap.contains(x-1,y)) {
+            printText(F("moving absolute left"));
+            delay(1000);
             move(Direction::LEFT);
             hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->up == true && hStack.size() > 0 && !nodeMap.contains(x,y+1)) {
+        } else if (currentNode->up && !nodeMap.contains(x,y+1)) {
+            printText(F("moving absolute Front"));
+            delay(1000);
             move(Direction::FRONT);
             hStack.push(*nodeMap.get(x,y));
-        } else {
+        } else if (hStack.size() > 0) {
+            printText(F("reversing"));
+            delay(1000);
+            printText("stack size: " + String(hStack.size()));
+            delay(5000);
             reversal();
         }
-    }
-
-    void printCurrentPoint() {
-        readLidar();
-        Serial.println(String(currentPoint.angle) + F(" ") + String(currentPoint.distance) + F(" ") + String(currentPoint.quality) + F(" ") + String(currentPoint.startBit));
-    }
-
-    void exportLidarData() {
-        fullScan(400);
-        for (uint16_t i = 0; i < 3600; i++) {
-            Serial.println(String((float)i / 10) + F(" ") + String(pointMemory[i]));
-        }
-        Serial.println(F("\n\n\n"));
+        stop();
     }
 
     void methodTester() {
@@ -669,4 +721,6 @@ Robot robot;
 
 void setup() { robot.startup(); }
 
-void loop() {robot.methodTester();  }
+void loop() {
+    robot.run();  
+}
