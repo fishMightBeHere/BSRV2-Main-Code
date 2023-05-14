@@ -1,5 +1,5 @@
 /*
-    5/4/2023
+    5/14/2023
 
   TODO:
     TESTS:
@@ -13,8 +13,6 @@
 
       black tile logic
 
-      add functionality for 360 deg wraparound and calibrate to back
-        if not possible, set turn time to be as close to 90 deg as possible so that in the case of entering a t intersection and turning right, the robot will not brick itself
 
     HARDWARE:
       build communication between pi and nano
@@ -52,8 +50,7 @@ enum Direction { FRONT, RIGHT, BACK, LEFT };
 struct LidarData {
     float distance;
     float angle;
-    bool startBit;
-    byte quality;
+    uint8_t quality;
 };
 
 struct Node {
@@ -95,13 +92,13 @@ class Robot {
     RPLidar lidar;
 
     uint32_t e = 0;  // error
-    uint16_t previousAngle = 0;
+    float previousAngle = 0;
 
     int8_t x = 0;
     int8_t y = 0;
     Direction currentDirection = FRONT;
 
-    //const float LUX_CONSTANT;
+    float LUX_CONSTANT;
 
     void TCA(uint8_t bus) {
         Wire.beginTransmission(0x70);
@@ -165,39 +162,76 @@ class Robot {
         // does not work based on start bit due to start bit not necessarily indicating a new rotation
 
         // clear current pointcloud
-        memset(pointMemory, 0, sizeof(pointMemory));
+
+        // printText("f0");
+        for (uint16_t i = 0; i < 3600; i++) {
+            pointMemory[i] = 0;
+        }
+        // printText("f1");
+
         uint16_t i = 0;
         while (i < n) {
             if (readLidar()) {
                 i++;
             }
         }
+        // printText("f3");
     }
 
     double angleToWall(uint16_t theta1, uint16_t theta2) {
+        //printText(" ");
         fullScan(200);
+        //printText("scan success");
+        // printText("p0");
         double sum_x = 0;
         double sum_y = 0;
         double sum_x2 = 0;
         double sum_y2 = 0;
         double sum_xy = 0;
-        uint16_t n = 0;
-        for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
-            if (pointMemory[i] != 0) {
-                int16_t y = pointMemory[i] * cos((i / 10.0) * DEG_TO_RAD);
-                int16_t x = pointMemory[i] * sin((i / 10.0) * DEG_TO_RAD);
-                sum_x += x;
-                sum_y += y;
-                sum_x2 += x * x;
-                sum_y2 += y * y;
-                sum_xy = sum_xy + x * y;
-                n++;
+        uint32_t i = theta1*10;
+        uint32_t n = 0;
+        // printText("p1");
+        while (i < theta2*10) {
+            if (abs(sum_x) > 200000000 || abs(sum_y) > 200000000 || abs(sum_x2) > 200000000 || abs(sum_y2) > 200000000 || abs(sum_xy) > 200000000) {
+                //printText("prevented overflow");
+                break;
             }
+
+            // printText("p2");
+
+            if (pointMemory[i%3600] != 0) {
+                //printText("p3");
+                double y = pointMemory[i%3600] * cos((i / 10.0) * DEG_TO_RAD);
+                //printText("p4");
+                double x = pointMemory[i%3600] * sin((i / 10.0) * DEG_TO_RAD);
+                //printText("p5");
+                sum_x += x;
+                //printText("p6");
+                sum_y += y;
+                //printText("p7");
+                sum_x2 += x * x;
+                //printText("p8");
+                sum_y2 += y * y;
+                //printText("p9");
+                sum_xy = sum_xy + x * y;
+                //printText("p10");
+                n++;
+                //printText("p11");
+            } 
+            i++;
         }
+        // printText("p12");
+        if ((n * sum_x2 - sum_x * sum_x) == 0 ) {
+            printText(F("divide by zero error protection"));
+            return 90.0;
+        }
+        // printText("p13");
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
-        //    int x = 10;
+        //printText("p14");
         // double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
-        printText(String(atan(m) * RAD_TO_DEG));
+
+        printText(String(atan(m) * RAD_TO_DEG, 2));
+        //printText("p15");
         return atan(m) * RAD_TO_DEG;
     }
 
@@ -252,7 +286,8 @@ class Robot {
             case LEFT:
                 calibrateToWall(80, 100, true);
                 break;
-            default:
+            case BACK:
+                calibrateToWall(350, 370, true);
                 break;
         }
     }
@@ -276,21 +311,27 @@ class Robot {
         // distances between 3900 and 4100
         // filter out qualities that are not 15
         // filter out changes in angle that are greater than s deg
+        
+        //possible place for integer overflow, if e gets too big, set it back to 0
+        if (e > 30000) {
+            e = 0;
+        }
 
-        if (d.quality == 15 && d.distance < 6000 && d.distance > 150 && (d.distance < 3900 || d.distance > 4100) && (d.angle < 123 || d.angle > 125)) {
-            if (d.angle < 360 && angleDistance(previousAngle, d.angle) < stde + e) {  // make sure that the angle can never be above 360 or else program dies
+        if (d.quality == 15 && d.distance < 6000 && d.distance > 150 && (d.distance < 3900 || d.distance > 4100) && (d.angle < 123 || d.angle > 125) && d.angle < 360 && d.angle >= 0) {
+            if (angleDistance(previousAngle, d.angle) < stde + e) {  // make sure that the angle can never be above 360 or else program dies
                 pointMemory[(uint16_t)(d.angle * 10)] = d.distance;
+                previousAngle = d.angle;
                 return true;
             } else
                 e += stde;
         } else
             e += stde;
 
-        //possible place for integer overflow, if e gets too big, set it back to 0
-        if (e > 300000) {
-            e = 0;
+        if (d.angle < 360 && d.angle >= 0) {
+            pointMemory[(uint16_t)(d.angle * 10)] = 0;
+        } else { //prevent possible angles greater than 360
+            pointMemory[3599] = 0;
         }
-        pointMemory[(uint16_t)(d.angle * 10)] = 0;
         return false;
     }
 
@@ -321,7 +362,6 @@ class Robot {
             LidarData d;
             d.distance = lidar.getCurrentPoint().distance;  // in mm
             d.angle = lidar.getCurrentPoint().angle;        // in deg
-            d.startBit = lidar.getCurrentPoint().startBit;  // wheter point belongs to new scan
             d.quality = lidar.getCurrentPoint().quality;    // quality of measurement
 
             return filterData(d);
@@ -329,16 +369,15 @@ class Robot {
             analogWrite(MOTOCTL, 0);  // stop the rplidar motor
 
             printText(F("lost connection to lidar"));
-            delay(1000);
             // try to detect RPLIDAR...
             rplidar_response_device_info_t info;
             if (IS_OK(lidar.getDeviceInfo(info, 100))) {
                 // detected...
+                printText(F("detected"));
                 lidar.startScan();
 
                 // start motor rotating at max allowed speed
                 analogWrite(MOTOCTL, 255);
-                delay(1000);
             }
         }
         return false;
@@ -480,7 +519,6 @@ class Robot {
    public:
     Robot() {}
     void startup() {
-        pinMode(LED_BUILTIN, OUTPUT);
 
         if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
             digitalWrite(LED_BUILTIN, HIGH);
@@ -533,17 +571,17 @@ class Robot {
             while (1)
                 ;
         }
-        //sensors_event_t event;
-        //luxSensor.getEvent(&event);
-        //LUX_CONSTANT = event.light;
+        sensors_event_t event;
+        luxSensor.getEvent(&event);
+        LUX_CONSTANT = event.light;
 
-        //printText(F("luxSensor ok"));
-/*
+        printText(F("luxSensor ok"));
+
         if (!imu.begin()) {
             printText(F("imu failed"));
             while(1);
         }
-        printText(F("imu ok"));*/
+        printText(F("imu ok"));
 
         pinMode(EN1, OUTPUT);
         pinMode(PH1, OUTPUT);
@@ -562,7 +600,6 @@ class Robot {
         addpoint();
         hStack.push(*nodeMap.get(x,y));
     }
-    // entry point for the entire robot
 
     void addpoint() {
         Node n;
@@ -712,8 +749,8 @@ class Robot {
     }
 
     void methodTester() {
-        turn90DegRight(false);
-        delay(10000);
+        dispenseMedkit(5);
+
     }
 };
 
@@ -722,5 +759,6 @@ Robot robot;
 void setup() { robot.startup(); }
 
 void loop() {
-    robot.run();  
+    robot.methodTester();
+    //robot.run();  
 }
