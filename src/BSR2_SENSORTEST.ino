@@ -3,19 +3,14 @@
 
   TODO:
     TESTS:
-      test medkit dispenser and blink
-      live memory performance testing
       **add code for multiple layered mazes
 
     CODE:
       clean up code and remove deprecated stuff
-      train pi with data
 
       blue tile logic        
 
     HARDWARE:
-      build communication between pi and nano
-      leds
 
 */
 
@@ -46,6 +41,7 @@
 
 #define stde 30  // standard error for filtering
 #define LUX_CONSTANT 200
+#define BLUE_TILE_CONSTANT 300
 
 enum Direction { FRONT, RIGHT, BACK, LEFT };
 
@@ -184,15 +180,23 @@ class Robot {
     }
 
     double angleToWall(uint16_t theta1, uint16_t theta2) {
-        fullScan(400);
-
         double sum_x = 0;
         double sum_y = 0;
         double sum_x2 = 0;
         double sum_y2 = 0;
         double sum_xy = 0;
-        uint32_t i = theta1 * 10;
         uint32_t n = 0;
+
+    
+        fullScan(400);
+
+        sum_x = 0;
+        sum_y = 0;
+        sum_x2 = 0;
+        sum_y2 = 0;
+        sum_xy = 0;
+        uint32_t i = theta1 * 10;
+        n = 0;
         while (i < theta2 * 10) {
             if (abs(sum_x) > 200000000 || abs(sum_y) > 200000000 || abs(sum_x2) > 200000000 || abs(sum_y2) > 200000000 || abs(sum_xy) > 200000000) {
                 printText(F("overflow protection"));
@@ -211,10 +215,12 @@ class Robot {
             }
             i++;
         }
+    
+
         if ((n * sum_x2 - sum_x * sum_x) == 0) {
-            // printText(F("divide by zero error protection"));
-            return 90.0;
+            return NULL;
         }
+
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
 
         // printText(String(atan(m) * RAD_TO_DEG, 2));
@@ -273,19 +279,20 @@ class Robot {
         // this function will only work at front and back walls as the slope will tend towards 0
         // closer, 0 or 90
         stop();
+        delay(750);
         double m = angleToWall(theta1, theta2);
 
-        if (m > 0) {
+        if (m > 5) {
             rightMotors(15, directionInverter(Direction::FRONT, invert));
             leftMotors(15, directionInverter(Direction::BACK, invert));
-            while (m >= 0) {
+            while (m >= 1) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
-        } else if (m < 0) {
-            rightMotors(10, directionInverter(Direction::BACK, invert));
-            leftMotors(10, directionInverter(Direction::FRONT, invert));
-            while (m <= 0) {
+        } else if (m < -5) {
+            rightMotors(15, directionInverter(Direction::BACK, invert)); //!invert
+            leftMotors(15, directionInverter(Direction::FRONT, invert));
+            while (m <= -1) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
@@ -296,6 +303,7 @@ class Robot {
     void calibrateToWallVL(uint16_t theta1, uint16_t theta2, bool invert) {
         // functionally the same as calibrateToWallHZ but as walls to left and right of the robot tend towards 90 deg when palallel
         stop();
+        delay(750);
         double m = angleToWall(theta1,theta2);
 
         if (m > 0 && m <= 87) {
@@ -305,10 +313,10 @@ class Robot {
                 m = angleToWall(theta1,theta2);
                 printText(String(m));
             }
-        } else if (m <= 0 && m >= -87) {
+        } else if (m < 0 && m >= -87) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
-            while (m <= 0 && m > -87) {
+            while (m < 0 && m > -87) {
                 m = angleToWall(theta1,theta2);
                 printText(String(m));
             }
@@ -318,7 +326,7 @@ class Robot {
     void calibrateToWall(Direction d) {
         switch (d) {
             case FRONT:
-                calibrateToWallHZ(170, 190, false);
+                calibrateToWallHZ(170, 190, true);
                 break;
             case RIGHT:
                 calibrateToWallVL(260, 280, false);
@@ -434,8 +442,15 @@ class Robot {
 
     void checkVictim() {
         if (Serial.available() > 0) {
+            stop();
             String data =  Serial.readStringUntil('\n');
             printText("victim detected: " + data);
+            for (uint8_t i = 0; i < 5; i++) {
+                digitalWrite(BLINKER, HIGH);
+                delay(500);
+                digitalWrite(BLINKER,LOW);
+                delay(500);
+            }
 
             switch (data[0])
             {
@@ -484,8 +499,22 @@ class Robot {
         // possibly keep track of distance change in both directions average
         // distance should add some level of noiseproofing to measurements, we could
         // use median to be even more resistant to outliers
-
+        bool blueTrg = true;
         sensors_event_t lux;
+
+        if (readVl(Direction::BACK) < 200) {
+            while (readVl(Direction::BACK) > 65) {
+                rightMotors(15,Direction::BACK);
+                leftMotors(15,Direction::BACK);
+            }
+            stop();
+            while (readVl(Direction::BACK) < 65) {
+                rightMotors(15, Direction::FRONT);
+                leftMotors(15, Direction::FRONT);
+            }
+            stop();
+            calibrateToWall();
+        }
 
         fullScan(300);
         uint16_t di = medianDistance(170, 190);  // initial distance
@@ -517,6 +546,13 @@ class Robot {
                 return false;
             }
 
+            if (blueTrg && lux.light > LUX_CONSTANT && lux.light < BLUE_TILE_CONSTANT) {
+                blueTrg = false;
+                delay(3000); // wait for robot to move onto blue tile
+                stop();
+                delay(5000);
+            }
+
             printText("change in d: " + String(abs(dt - di)));
             /*
             if (pitch() > 10) {
@@ -526,37 +562,61 @@ class Robot {
             checkVictim();
         }
         stop();
+        if (readVl(Direction::FRONT) < 200) {
+            while (readVl(Direction::FRONT) > 65) {
+                rightMotors(15,Direction::FRONT);
+                leftMotors(15,Direction::FRONT);
+            }
+            stop();
+            while (readVl(Direction::FRONT) < 65) {
+                rightMotors(15, Direction::BACK);
+                leftMotors(15, Direction::BACK);
+            }
+            stop();
+        }
+
+        calibrateToWall();
+
         return true;
     }
 
-    void turn90DegRight(boolean invert) {
-        rightMotors(30, directionInverter(Direction::BACK, invert));
-        leftMotors(30, directionInverter(Direction::FRONT, invert));
-        delay(7500);  // about the time it takes for it to make a turn
-        stop();
-
-        if (readVl(Direction::FRONT) < 150) {
+    void calibrateToWall() {
+        if (readVl(Direction::FRONT) < 255 && readVl(Direction::FRONT) >= 60) {
             printText(F("calibrating to wall in front"));
             delay(2000);
             fullScan(200);
             calibrateToWall(Direction::FRONT);
-        } else if (readVl(Direction::RIGHT) < 150) {
-            printText(F("calibrating to wall to right"));
-            delay(2000);
-            fullScan(200);
-            calibrateToWall(Direction::RIGHT);
-        } else if (readVl(Direction::LEFT) < 150) {
-            printText(F("calibrating to wall in left"));
-            delay(2000);
-            fullScan(200);
-            calibrateToWall(Direction::LEFT);
-        } else if (readVl(Direction::BACK) < 150) {
+        } else if (readVl(Direction::BACK) < 255 && readVl(Direction::BACK) >= 60) {
             printText(F("calibrating to wall in back"));
             delay(2000);
             fullScan(200);
             calibrateToWall(Direction::BACK);
+        } else if (readVl(Direction::RIGHT) < 255 && readVl(Direction::RIGHT) >= 60) {
+            printText(F("calibrating to wall to right"));
+            delay(2000);
+            fullScan(200);
+            calibrateToWall(Direction::RIGHT);
+        } else if (readVl(Direction::LEFT) < 255 && readVl(Direction::LEFT) >= 60) {
+            printText(F("calibrating to wall in left"));
+            delay(2000);
+            fullScan(200);
+            calibrateToWall(Direction::LEFT);
+        }  else {
+            printText(F("no sutiable wall detected"));
+            delay(1000);
         }
         stop();
+    }
+
+    void turn90DegRight(boolean invert, uint8_t k) {
+        rightMotors(30, directionInverter(Direction::BACK, invert));
+        leftMotors(30, directionInverter(Direction::FRONT, invert));
+        for (uint8_t i = 0; i < k; i++) {
+            delay(7500);  // about the time it takes for it to make a turn
+        }
+        stop();
+
+        calibrateToWall();         
     }
 
     void rightMotors(uint8_t speed, Direction d) {
@@ -617,18 +677,18 @@ class Robot {
         // Clear the buffer
         printText(F("starting"));
         delay(1000);
+        printText(F("waiting for pi ..."));
 
-        // Serial.begin(9600);
-        // while (!Serial) {
-        //     delay(1);
-        // }
+        Serial.begin(9600);
+        while (!Serial) {
+            delay(1);
+        }
 
-        // printText(F("waiting for pi ..."));
-        // while (Serial.available() == 0) {
-        //     delay(1);
-        // }
-        // Serial.readStringUntil('\n');
-        // printText(F("pi detected"));
+        while (Serial.available() == 0) {
+            delay(1);
+        }
+        Serial.readStringUntil('\n');
+        printText(F("pi detected"));
 
         // start the tofs
         TCA(0);
@@ -717,7 +777,7 @@ class Robot {
         if (currentDirection == Direction::LEFT || currentDirection == Direction::RIGHT) {
             n.up = readVl((Direction)((currentDirection + 2) % 4)) > 200 ? true : false;
         } else {
-            n.up = readVl(currentDirection);
+            n.up = readVl(currentDirection) > 200 ? true : false;
         }
 
         if (currentDirection == Direction::FRONT || currentDirection == Direction::RIGHT) {
@@ -750,9 +810,9 @@ class Robot {
             tD = true;
         }
 
-        for (uint8_t i = 0; i < k; i++) {
-            turn90DegRight(tD);
-        }
+        
+        turn90DegRight(tD,k);
+        
         currentDirection = d;
 
         if (!travel30cm()) {
@@ -788,20 +848,20 @@ class Robot {
         Node* nT[50];
         uint8_t id = 0;
 
-        Node* shortcut = hStack.peek();
-        printText("previous node was : " + String(shortcut->x) + ", " + String(shortcut->y));
 
-        Node* nC = hStack.peek();
+        Node* nC = hStack.pop();
+        Node* shortcut = hStack.peek();
+        printText("previous node is : " + String(shortcut->x) + ", " + String(shortcut->y));
 
         do {
             nC = hStack.pop();
 
             nT[id] = nC;
             id++;
-            // check optimal node to start off //seems that this is never true
-            if ((nC->y == y && nC->x == x + 1 && nC->left) || (nC->y == y && nC->x == x - 1 && nC->right) || (nC->x == x && nC->y == y + 1 && nC->down) || (nC->x == x && nC->y == y - 1 && nC->up)) {
+            // check optimal node to start off 
+            if ((nC->y == y && nC->x == x + 1 && nC->left) || (nC->y == y && nC->x == x - 1 && nC->right) || (nC->x == x && nC->y == y - 1 && nC->up) || (nC->x == x && nC->y == y + 1 && nC->down)) {
                 shortcut = nC;
-                printText("shortcut is : (" + String(nC->x) + ", " + String(nC->y) + ")");
+                // printText("shortcut is : (" + String(nC->x) + ", " + String(nC->y) + ")");
             }
             //goofy conditional -> loop while nc adjacent node does not exist and that node would be accesible from nc
             // stop when we have an adjacent node that has not been explored and is accesible from nc
@@ -903,7 +963,7 @@ class Robot {
     }
 
     void methodTester() {
-        calibrateToWall(Direction::LEFT);
+        calibrateToWall(Direction::FRONT);
     }
 };
 
