@@ -11,8 +11,7 @@
       clean up code and remove deprecated stuff
       train pi with data
 
-      black tile logic
-
+      blue tile logic        
 
     HARDWARE:
       build communication between pi and nano
@@ -21,6 +20,7 @@
 */
 
 #include <Adafruit_GFX.h>
+#include <Adafruit_LSM9DS1.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_VL6180X.h>
 #include <Arduino.h>
@@ -29,7 +29,7 @@
 #include <RunningMedian.h>
 #include <TwoDTree.h>
 #include <Wire.h>
-#include <Adafruit_LSM9DS1.h>
+
 #include "Adafruit_TSL2561_U.h"
 
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -40,10 +40,12 @@
 #define PH2 A3
 
 #define SOLENOID_PIN 12  // for controlling the solenoid trigger
+#define BLINKER 11 // led for blink
 
 #define MOTOCTL A7
 
 #define stde 30  // standard error for filtering
+#define LUX_CONSTANT 200
 
 enum Direction { FRONT, RIGHT, BACK, LEFT };
 
@@ -54,12 +56,12 @@ struct LidarData {
 };
 
 struct Node {
-    Node* leftNode;//for some reason the size of a node will actually reduce when we put the pointers in the node first
+    Node* leftNode;  // for some reason the size of a node will actually reduce when we put the pointers in the node first
     Node* rightNode;
     int8_t x;
     int8_t y;
-    
-    // these are bools confirming connectivity with the 4 possible geometrically adjacent nodes, we can then calculate each adjacent node's coordinates 
+
+    // these are bools confirming connectivity with the 4 possible geometrically adjacent nodes, we can then calculate each adjacent node's coordinates
     bool up : 1;
     bool down : 1;
     bool left : 1;
@@ -67,15 +69,15 @@ struct Node {
 };
 
 TwoDTree<Node> nodeMap(50);
-//TwoDTree<Node> floorTwo(15);
+TwoDTree<Node> floorTwo(15);
 Dequeue<Node> hStack(50);
-//Dequeue<Node> floorTwoStack(15);
+Dequeue<Node> floorTwoStack(15);
 LidarData currentPoint;
 
 byte rightMotorSpeed;
 byte leftMotorSpeed;
 
-Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1();
+// Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1();
 
 Adafruit_VL6180X tofFront;  // connected to sd sc 3
 Adafruit_VL6180X tofRight;  // connected to sd sc 2
@@ -98,7 +100,7 @@ class Robot {
     int8_t y = 0;
     Direction currentDirection = FRONT;
 
-    float LUX_CONSTANT;
+    bool onFloorTwo = false;
 
     void TCA(uint8_t bus) {
         Wire.beginTransmission(0x70);
@@ -116,6 +118,12 @@ class Robot {
     }
 
     void dispenseMedkit(uint8_t n) {
+        for (uint8_t i = 0; i < 5; i++) {
+            digitalWrite(BLINKER, HIGH);
+            delay(500);
+            digitalWrite(BLINKER,LOW);
+            delay(500);
+        }
         for (uint8_t i = 0; i < n; i++) {
             digitalWrite(SOLENOID_PIN, HIGH);
             delay(1000);
@@ -163,11 +171,9 @@ class Robot {
 
         // clear current pointcloud
 
-        // printText("f0");
         for (uint16_t i = 0; i < 3600; i++) {
             pointMemory[i] = 0;
         }
-        // printText("f1");
 
         uint16_t i = 0;
         while (i < n) {
@@ -175,67 +181,78 @@ class Robot {
                 i++;
             }
         }
-        // printText("f3");
     }
 
     double angleToWall(uint16_t theta1, uint16_t theta2) {
-        //printText(" ");
-        fullScan(200);
-        //printText("scan success");
-        // printText("p0");
+        fullScan(400);
+
         double sum_x = 0;
         double sum_y = 0;
         double sum_x2 = 0;
         double sum_y2 = 0;
         double sum_xy = 0;
-        uint32_t i = theta1*10;
+        uint32_t i = theta1 * 10;
         uint32_t n = 0;
-        // printText("p1");
-        while (i < theta2*10) {
+        while (i < theta2 * 10) {
             if (abs(sum_x) > 200000000 || abs(sum_y) > 200000000 || abs(sum_x2) > 200000000 || abs(sum_y2) > 200000000 || abs(sum_xy) > 200000000) {
-                //printText("prevented overflow");
+                printText(F("overflow protection"));
                 break;
             }
 
-            // printText("p2");
-
-            if (pointMemory[i%3600] != 0) {
-                //printText("p3");
-                double y = pointMemory[i%3600] * cos((i / 10.0) * DEG_TO_RAD);
-                //printText("p4");
-                double x = pointMemory[i%3600] * sin((i / 10.0) * DEG_TO_RAD);
-                //printText("p5");
+            if (pointMemory[i % 3600] != 0) {
+                double y = pointMemory[i % 3600] * cos((i / 10.0) * DEG_TO_RAD);
+                double x = pointMemory[i % 3600] * sin((i / 10.0) * DEG_TO_RAD);
                 sum_x += x;
-                //printText("p6");
                 sum_y += y;
-                //printText("p7");
                 sum_x2 += x * x;
-                //printText("p8");
                 sum_y2 += y * y;
-                //printText("p9");
                 sum_xy = sum_xy + x * y;
-                //printText("p10");
                 n++;
-                //printText("p11");
-            } 
+            }
             i++;
         }
-        // printText("p12");
-        if ((n * sum_x2 - sum_x * sum_x) == 0 ) {
-            printText(F("divide by zero error protection"));
+        if ((n * sum_x2 - sum_x * sum_x) == 0) {
+            // printText(F("divide by zero error protection"));
             return 90.0;
         }
-        // printText("p13");
         double m = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
-        //printText("p14");
-        // double b = (sum_x2 * sum_y - sum_x * sum_xy) / (n * sum_x2 - sum_x * sum_x);
 
-        printText(String(atan(m) * RAD_TO_DEG, 2));
-        //printText("p15");
+        // printText(String(atan(m) * RAD_TO_DEG, 2));
         return atan(m) * RAD_TO_DEG;
     }
 
-    Direction directionInverter(Direction d, bool i) {  // helper function for calibrate to wall, i determines whether to actually invert it
+    double angleToWallV2(uint16_t theta1, uint16_t theta2) {
+        fullScan(400);
+        RunningMedian q1((uint16_t)(abs(theta2-theta1)/2) + 1);
+        RunningMedian q3((uint16_t)(abs(theta2-theta1)/2) + 1);
+        for (uint16_t i = theta1; i < (theta1+abs(theta2-theta1))%3600; i++) {
+            //add pointss to find q1 _> convert to coordinates find slope
+            if (pointMemory[i] != 0) {
+                q1.add(pointMemory[i]);
+            }
+        }
+
+        for (uint16_t i = (abs(theta2-theta1))%3600; i%3600 < theta2; i++) {
+            if (pointMemory[i] != 0) {
+                q3.add(pointMemory[i]);
+            }
+        }
+        //y2-y1/x2-x1
+
+        float y2 = q3.getMedian() * sin(theta1 + (angleDistance(theta1,theta2) / 4) * DEG_TO_RAD);
+        float y1 = q1.getMedian() * sin(theta1 + 3*(angleDistance(theta1,theta2) / 4) * DEG_TO_RAD);
+        float x2 = q3.getMedian() * cos(theta1 + (angleDistance(theta1,theta2) / 4) * DEG_TO_RAD);
+        float x1 = q1.getMedian() * cos(theta1 + 3*(angleDistance(theta1,theta2) / 4) * DEG_TO_RAD);
+        
+        //printText(String(y2) + " " + String(y1) + " " + String(x2) + " " + String(x1));
+        
+        float m = (y2-y1)/(x2-x1);
+        
+
+        return atan(m);
+    }
+
+    Direction directionInverter(Direction d, bool i) {  // helper function for calibrate to wall, it determines whether to actually invert it
         if (i) {
             switch (d) {
                 case FRONT:
@@ -251,23 +268,24 @@ class Robot {
         return d;
     }
 
-    void calibrateToWall(uint16_t theta1, uint16_t theta2, bool invert) {
+    void calibrateToWallHZ(uint16_t theta1, uint16_t theta2, bool invert) {
         // will adjust robot position to be as parellel to wall whichever angle is
+        // this function will only work at front and back walls as the slope will tend towards 0
         // closer, 0 or 90
         stop();
         double m = angleToWall(theta1, theta2);
 
         if (m > 0) {
-            rightMotors(10, directionInverter(Direction::FRONT, invert));
-            leftMotors(10, directionInverter(Direction::BACK, invert));
-            while (m >= 5) {
+            rightMotors(15, directionInverter(Direction::FRONT, invert));
+            leftMotors(15, directionInverter(Direction::BACK, invert));
+            while (m >= 0) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
         } else if (m < 0) {
             rightMotors(10, directionInverter(Direction::BACK, invert));
             leftMotors(10, directionInverter(Direction::FRONT, invert));
-            while (m <= -5) {
+            while (m <= 0) {
                 m = angleToWall(theta1, theta2);
                 printText(String(m));
             }
@@ -275,19 +293,41 @@ class Robot {
         stop();
     }
 
+    void calibrateToWallVL(uint16_t theta1, uint16_t theta2, bool invert) {
+        // functionally the same as calibrateToWallHZ but as walls to left and right of the robot tend towards 90 deg when palallel
+        stop();
+        double m = angleToWall(theta1,theta2);
+
+        if (m > 0 && m <= 87) {
+            rightMotors(15,directionInverter(Direction::FRONT, invert));
+            leftMotors(15, directionInverter(Direction::BACK, invert));
+            while (m > 0 && m < 86) {
+                m = angleToWall(theta1,theta2);
+                printText(String(m));
+            }
+        } else if (m <= 0 && m >= -87) {
+            rightMotors(10, directionInverter(Direction::BACK, invert));
+            leftMotors(10, directionInverter(Direction::FRONT, invert));
+            while (m <= 0 && m > -87) {
+                m = angleToWall(theta1,theta2);
+                printText(String(m));
+            }
+        }
+    }
+
     void calibrateToWall(Direction d) {
         switch (d) {
             case FRONT:
-                calibrateToWall(170, 190, false);
+                calibrateToWallHZ(170, 190, false);
                 break;
             case RIGHT:
-                calibrateToWall(260, 280, true);
+                calibrateToWallVL(260, 280, false);
                 break;
             case LEFT:
-                calibrateToWall(80, 100, true);
+                calibrateToWallVL(80, 100, false);
                 break;
             case BACK:
-                calibrateToWall(350, 370, true);
+                calibrateToWallHZ(350, 370, true);
                 break;
         }
     }
@@ -311,8 +351,8 @@ class Robot {
         // distances between 3900 and 4100
         // filter out qualities that are not 15
         // filter out changes in angle that are greater than s deg
-        
-        //possible place for integer overflow, if e gets too big, set it back to 0
+
+        // possible place for integer overflow, if e gets too big, set it back to 0
         if (e > 30000) {
             e = 0;
         }
@@ -329,7 +369,7 @@ class Robot {
 
         if (d.angle < 360 && d.angle >= 0) {
             pointMemory[(uint16_t)(d.angle * 10)] = 0;
-        } else { //prevent possible angles greater than 360
+        } else {  // prevent possible angles greater than 360
             pointMemory[3599] = 0;
         }
         return false;
@@ -392,11 +432,40 @@ class Robot {
         digitalWrite(PH2, LOW);
     }
 
+    void checkVictim() {
+        if (Serial.available() > 0) {
+            String data =  Serial.readStringUntil('\n');
+            printText("victim detected: " + data);
+
+            switch (data[0])
+            {
+            case 'h':
+                dispenseMedkit(3);
+                break;
+            case 's':
+                dispenseMedkit(2);
+                break;
+            case 'u':
+                // dispense nothing
+                break;
+            case 'r':
+                dispenseMedkit(1);
+                break;
+            case 'y':
+                dispenseMedkit(1);
+                break;
+            case 'g':
+                // dispense nothing
+                break;
+            }
+        }
+    }
+
     uint16_t medianDistance(uint16_t theta1, uint16_t theta2) {
         // the idea of this function is to find the distance from the theta
         // inbetween theta1 and 2 being a median, this will be more noise resistant
 
-        RunningMedian r = RunningMedian(abs(theta2 * 10 - theta1 * 10)); //max size of median is 255 we are setting this usually of size 200 //allocates total of 1kb of ram
+        RunningMedian r = RunningMedian(abs(theta2 * 10 - theta1 * 10));  // max size of median is 255 we are setting this usually of size 200 //allocates total of 1kb of ram
 
         for (uint16_t i = theta1 * 10; i < theta2 * 10; i++) {
             if (pointMemory[i] != 0) {
@@ -426,24 +495,35 @@ class Robot {
         }
         uint16_t dt = di;
         while (abs(dt - di) < 300) {
-            rightMotors(15, Direction::FRONT);
-            leftMotors(15, Direction::FRONT);
+            rightMotors(25, Direction::FRONT);
+            leftMotors(25, Direction::FRONT);
             fullScan(300);
             dt = medianDistance(170, 190);
 
-            //luxSensor.getEvent(&lux);
-            /*if (lux.light > LUX_CONSTANT) { // set the point attempted to traverse to direction as false and then reverses to origional position
-                while (dt > di) {
-                    dt = medianDistance(170,190);
-                    rightMotors(10,Direction::BACK);
-                    rightMotors(10,Direction::BACK);
+            TCA(4);
+            luxSensor.getEvent(&lux);
+            if (lux.light < LUX_CONSTANT) {  // set the point attempted to traverse to direction as false and then reverses to origional position
+                stop();
+                printText(F("hole detected"));
+                delay(1000);
+                while (di-dt >= 0) {
+                    fullScan(300);
+                    dt = medianDistance(170, 190);
+                    rightMotors(20, Direction::BACK);
+                    leftMotors(20, Direction::BACK);
+                    printText("change in d holeMode: " + String(abs(dt - di)));
                 }
                 stop();
                 return false;
-            }*/
+            }
 
             printText("change in d: " + String(abs(dt - di)));
+            /*
+            if (pitch() > 10) {
+                onFloorTwo = true;
+            }*/
 
+            checkVictim();
         }
         stop();
         return true;
@@ -452,25 +532,30 @@ class Robot {
     void turn90DegRight(boolean invert) {
         rightMotors(30, directionInverter(Direction::BACK, invert));
         leftMotors(30, directionInverter(Direction::FRONT, invert));
-        delay(7000);  // about the time it takes for it to make a turn
+        delay(7500);  // about the time it takes for it to make a turn
         stop();
 
         if (readVl(Direction::FRONT) < 150) {
             printText(F("calibrating to wall in front"));
             delay(2000);
-            fullScan(400);
+            fullScan(200);
             calibrateToWall(Direction::FRONT);
         } else if (readVl(Direction::RIGHT) < 150) {
             printText(F("calibrating to wall to right"));
             delay(2000);
-            fullScan(400);
+            fullScan(200);
             calibrateToWall(Direction::RIGHT);
         } else if (readVl(Direction::LEFT) < 150) {
             printText(F("calibrating to wall in left"));
             delay(2000);
-            fullScan(400);
+            fullScan(200);
             calibrateToWall(Direction::LEFT);
-        } 
+        } else if (readVl(Direction::BACK) < 150) {
+            printText(F("calibrating to wall in back"));
+            delay(2000);
+            fullScan(200);
+            calibrateToWall(Direction::BACK);
+        }
         stop();
     }
 
@@ -507,19 +592,18 @@ class Robot {
                 break;
         }
     }
+    /*
+        float pitch() {
+            imu.read();
+            sensors_event_t a, m, g, temp;
 
-    float pitch() {
-        imu.read(); 
-        sensors_event_t a, m, g, temp;
-
-        imu.getEvent(&a, &m, &g, &temp); 
-        return (180 * atan2(a.acceleration.x, sqrt(a.acceleration.y*a.acceleration.y + a.acceleration.z*a.acceleration.z))) / PI;
-    }
-
+            imu.getEvent(&a, &m, &g, &temp);
+            return (180 * atan2(a.acceleration.x, sqrt(a.acceleration.y*a.acceleration.y + a.acceleration.z*a.acceleration.z))) / PI;
+        }
+    */
    public:
     Robot() {}
     void startup() {
-
         if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
             digitalWrite(LED_BUILTIN, HIGH);
             while (1)
@@ -533,6 +617,18 @@ class Robot {
         // Clear the buffer
         printText(F("starting"));
         delay(1000);
+
+        // Serial.begin(9600);
+        // while (!Serial) {
+        //     delay(1);
+        // }
+
+        // printText(F("waiting for pi ..."));
+        // while (Serial.available() == 0) {
+        //     delay(1);
+        // }
+        // Serial.readStringUntil('\n');
+        // printText(F("pi detected"));
 
         // start the tofs
         TCA(0);
@@ -571,17 +667,15 @@ class Robot {
             while (1)
                 ;
         }
-        sensors_event_t event;
-        luxSensor.getEvent(&event);
-        LUX_CONSTANT = event.light;
-
+        luxSensor.setGain(TSL2561_GAIN_1X);
+        luxSensor.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
         printText(F("luxSensor ok"));
 
-        if (!imu.begin()) {
-            printText(F("imu failed"));
-            while(1);
-        }
-        printText(F("imu ok"));
+        // if (!imu.begin()) {
+        //     printText(F("imu failed"));
+        //     while(1);
+        // }
+        // printText(F("imu ok"));
 
         pinMode(EN1, OUTPUT);
         pinMode(PH1, OUTPUT);
@@ -589,6 +683,7 @@ class Robot {
         pinMode(PH2, OUTPUT);
 
         pinMode(SOLENOID_PIN, OUTPUT);
+        pinMode(BLINKER, OUTPUT);
 
         Serial.begin(9600);
         lidar.begin(Serial1);
@@ -596,9 +691,9 @@ class Robot {
         pinMode(MOTOCTL, OUTPUT);
         analogWrite(MOTOCTL, 255);
 
-        //push strartpoint into stack and nodeMap
+        // push strartpoint into stack and nodeMap
         addpoint();
-        hStack.push(*nodeMap.get(x,y));
+        hStack.push(*nodeMap.get(x, y));
     }
 
     void addpoint() {
@@ -607,14 +702,36 @@ class Robot {
         n.y = y;
         n.leftNode = NULL;
         n.rightNode = NULL;
-        n.down = readVl(Direction::BACK) > 150 ? true : false;
-        n.left = readVl(Direction::LEFT) > 140 ? true : false;
-        n.up = readVl(Direction::FRONT) > 150 ? true : false;
-        n.right = readVl(Direction::RIGHT) > 150 ? true : false;
+
+        //  f r b l
+        //  0 1 2 3
+
+        if (currentDirection == Direction::FRONT || currentDirection == Direction::BACK) {
+            n.down = readVl((Direction)((currentDirection + 2) % 4)) > 200 ? true : false;
+        } else {
+            n.down = readVl(currentDirection) > 200 ? true : false;
+        }
+
+        n.left = readVl((Direction)(3 - currentDirection)) > 200 ? true : false;
+
+        if (currentDirection == Direction::LEFT || currentDirection == Direction::RIGHT) {
+            n.up = readVl((Direction)((currentDirection + 2) % 4)) > 200 ? true : false;
+        } else {
+            n.up = readVl(currentDirection);
+        }
+
+        if (currentDirection == Direction::FRONT || currentDirection == Direction::RIGHT) {
+            n.right = readVl((Direction)abs(currentDirection - 1)) > 200 ? true : false;
+        } else {
+            n.right = readVl((Direction)(abs(currentDirection - 3) + 2)) > 200 ? true : false;
+        }
+
+        printText("adding point at :" + String(n.x) + ", " + String(n.y) + String(n.down) + String(n.left) + String(n.up) + String(n.right));
         nodeMap.put(n);
+        delay(1000);
     }
 
-    void move(Direction d) {
+    bool move(Direction d) {
         // traverse the robot to the geographical direction of the maze (not relative right to the robot)
         //  f r b l
         //  0 1 2 3
@@ -622,12 +739,12 @@ class Robot {
         // calculate the amount of turns to take and in which direction
         int k = 0;
         bool tD = false;
-        if (d - currentDirection == -1 || d - currentDirection == -3) {
+        if (d - currentDirection == -1 || d - currentDirection == 3) {
             // turn right once
             k = 1;
         } else if (abs(d - currentDirection) == 2) {
             k = 2;
-        } else if (d - currentDirection == 1 || d - currentDirection == 3) {
+        } else if (d - currentDirection == 1 || d - currentDirection == -3) {
             // turn left once
             k = 1;
             tD = true;
@@ -638,7 +755,9 @@ class Robot {
         }
         currentDirection = d;
 
-        travel30cm();
+        if (!travel30cm()) {
+            return false;
+        }  // Hole code***
 
         // update position in memeory
         switch (d) {
@@ -655,53 +774,71 @@ class Robot {
                 x--;
                 break;
         }
-    }
-    
-    void reversal() {
-        //calculate and execute shortest path to target through stack
 
+        if (!nodeMap.contains(x, y)) {
+            addpoint();
+        }
+
+        return true;
+    }
+
+    void reversal() {
+        // calculate and execute shortest path to target through stack
         // fill in temporary storage array with full stack reversal then calculate shortcuts
         Node* nT[50];
         uint8_t id = 0;
 
-        Node* shortcut = hStack.peekLast();
+        Node* shortcut = hStack.peek();
+        printText("previous node was : " + String(shortcut->x) + ", " + String(shortcut->y));
 
-        Node* nC = hStack.peekLast();
+        Node* nC = hStack.peek();
 
         do {
             nC = hStack.pop();
-            
+
             nT[id] = nC;
             id++;
-            //check optimal node to start off
-            if ((nC->y == y && nC->x == x+1) || (nC-> y == y && nC->x == x-1) || (nC->x == x && nC->y == y+1) || (nC->x == x && nC->y == y-1)) { 
+            // check optimal node to start off //seems that this is never true
+            if ((nC->y == y && nC->x == x + 1 && nC->left) || (nC->y == y && nC->x == x - 1 && nC->right) || (nC->x == x && nC->y == y + 1 && nC->down) || (nC->x == x && nC->y == y - 1 && nC->up)) {
                 shortcut = nC;
+                printText("shortcut is : (" + String(nC->x) + ", " + String(nC->y) + ")");
             }
-        //goofy conditional -> loop while nc adjacent node does not exist and that node would be accesible from nc
-        // stop when we have an adjacent node that has not been explored and is accesible from nc
-        } while (hStack.size() > 0 && !((!nodeMap.contains(nC->x + 1,nC->y) && nC->right) || (!nodeMap.contains(nC->x -1, nC->y) && nC->left) || (!nodeMap.contains(nC->x,nC->y + 1) && nC->up) || (!nodeMap.contains(nC->x,nC->y -1) && nC->down)));
-        
-        printText(String(id-1) + "items in nT");
-        delay(1000);
-        printText("shortcut :" + String(shortcut->x) + ", " + String(shortcut->y));
-        delay(3000);
+            //goofy conditional -> loop while nc adjacent node does not exist and that node would be accesible from nc
+            // stop when we have an adjacent node that has not been explored and is accesible from nc
+        } while (hStack.size() > 0 && !((!nodeMap.contains(nC->x + 1, nC->y) && nC->right) || (!nodeMap.contains(nC->x - 1, nC->y) && nC->left) || (!nodeMap.contains(nC->x, nC->y + 1) && nC->up) ||
+                                        (!nodeMap.contains(nC->x, nC->y - 1) && nC->down)));
 
-        hStack.push(*nT[id-1]); //this is to update the stack so it actually registers the target square
-        
+        printText(String(id - 1) + "items in nT");
+        printText("target node to end: " + String(nT[id - 1]->x) + ", " + String(nT[id - 1]->y));
+        printText("shortcut:" + String(shortcut->x) + ", " + String(shortcut->y));
+
+        hStack.push(*nT[id - 1]);  // this is to update the stack so it actually registers the target square
+
         bool trg = true;
-        for (uint8_t i = 0; i<id; i++) {
+        for (uint8_t i = 0; i < id; i++) {
             if (trg && nT[i] != shortcut) {
                 continue;
-            } 
+            }
             trg = false;
 
-            if (y == nT[i]->y && x+1 == nT[i]->x) {
+            printText("moving to: " + String(nT[i]->x) + " " + String(nT[i]->y));
+            delay(4000);
+
+            if (y == nT[i]->y && x + 1 == nT[i]->x) {
+                printText(F("reverse RIGHT"));
+                delay(1000);
                 move(Direction::RIGHT);
-            } else if (y == nT[i]->y && x-1 ==nT[i]->x) {
+            } else if (y == nT[i]->y && x - 1 == nT[i]->x) {
+                printText(F("reverse LEFT"));
+                delay(1000);
                 move(Direction::LEFT);
-            } else if (x == nT[i]->x && y+1 == nT[i]->y) {
+            } else if (x == nT[i]->x && y + 1 == nT[i]->y) {
+                printText(F("reverse FRONT"));
+                delay(1000);
                 move(Direction::FRONT);
-            } else if (x == nT[i]->x && y-1 == nT[i]->y) {
+            } else if (x == nT[i]->x && y - 1 == nT[i]->y) {
+                printText(F("reverse BACK"));
+                delay(1000);
                 move(Direction::BACK);
             }
         }
@@ -712,45 +849,61 @@ class Robot {
         delay(1000);
         if (!nodeMap.contains(x, y)) {
             addpoint();
-            printText("point added!" + String(x) + " " + String(y));
+            printText("point added! " + String(x) + " " + String(y));
             delay(1000);
-        }  
+        }
+
+        printText("current location " + String(x) + String(y));
+        delay(1000);
 
         Node* currentNode = nodeMap.get(x, y);
 
-        if (currentNode->right && !nodeMap.contains(x+1,y)) {
+        printText("currentNode: " + String(currentNode->x) + ", " + String(currentNode->y) + String(currentNode->down) + String(currentNode->left) + String(currentNode->up) +
+                  String(currentNode->right));
+        delay(1000);
+
+        if (currentNode->right && !nodeMap.contains(x + 1, y)) {
             printText(F("moving absolute right"));
             delay(1000);
-            move(Direction::RIGHT);
-            hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->down && !nodeMap.contains(x,y-1)) {
+            if (move(Direction::RIGHT)) {
+                hStack.push(*nodeMap.get(x, y));
+            } else {
+                currentNode->right = false;
+            }
+        } else if (currentNode->down && !nodeMap.contains(x, y - 1)) {
             printText(F("moving absolute back"));
             delay(1000);
-            move(Direction::BACK);
-            hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->left && !nodeMap.contains(x-1,y)) {
+            if (move(Direction::BACK)) {
+                hStack.push(*nodeMap.get(x, y));
+            } else {
+                currentNode->down = false;
+            }
+        } else if (currentNode->left && !nodeMap.contains(x - 1, y)) {
             printText(F("moving absolute left"));
             delay(1000);
-            move(Direction::LEFT);
-            hStack.push(*nodeMap.get(x,y));
-        } else if (currentNode->up && !nodeMap.contains(x,y+1)) {
+            if (move(Direction::LEFT)) {
+                hStack.push(*nodeMap.get(x, y));
+            } else {
+                currentNode->left = false;
+            }
+        } else if (currentNode->up && !nodeMap.contains(x, y + 1)) {
             printText(F("moving absolute Front"));
             delay(1000);
-            move(Direction::FRONT);
-            hStack.push(*nodeMap.get(x,y));
+            if (move(Direction::FRONT)) {
+                hStack.push(*nodeMap.get(x, y));
+            } else {
+                currentNode->up = false;
+            }
         } else if (hStack.size() > 0) {
             printText(F("reversing"));
             delay(1000);
-            printText("stack size: " + String(hStack.size()));
-            delay(5000);
             reversal();
         }
         stop();
     }
 
     void methodTester() {
-        dispenseMedkit(5);
-
+        calibrateToWall(Direction::LEFT);
     }
 };
 
@@ -759,6 +912,6 @@ Robot robot;
 void setup() { robot.startup(); }
 
 void loop() {
-    robot.methodTester();
-    //robot.run();  
+    // robot.methodTester();
+    robot.run();
 }
