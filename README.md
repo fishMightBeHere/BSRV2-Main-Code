@@ -6,3 +6,11 @@ Marco Hu
 Brian Jiang
 
 This is the platformio project used to program the robot
+
+Main code is located at:
+  src/BSR2_SENSORTEST.ino
+
+Custom libraries written are located at:
+  lib/Dequeue
+  lib/TwoDTree
+  
