@@ -2,20 +2,22 @@ import time
 import threading
 import cv2
 import numpy as np
-import pytesseract
 from PIL import Image
 import RPi.GPIO as GPIO
 import serial
 import numpy as np
-
 import subprocess
+
 output = subprocess.run(['v4l2-ctl', '--list-devices'], stdout = subprocess.PIPE).stdout.decode('utf-8')
 idxCam1 = int(output[output.index("USB 2.0 Camera")+62:output.index("USB 2.0 Camera")+63])
+idxCam2 = int(output[output.index("mmal service 16.1")+56:output.index("mmal service 16.1")+57])
 start_time = time.time()
 
 #start cameras
 cam1 = cv2.VideoCapture(idxCam1)
-cam2 = cv2.VideoCapture(0)
+cam2 = cv2.VideoCapture(idxCam2)
+
+print("O");
 
 #color HSV bounds
 cam1_RED_LOWER_0 = np.array([0, 150, 10])
@@ -23,22 +25,22 @@ cam1_RED_UPPER_0 = np.array([5, 255, 255])
 cam1_RED_LOWER_1 = np.array([165, 150, 10])
 cam1_RED_UPPER_1 = np.array([180, 255, 255])
 
-cam1_GREEN_LOWER = np.array([50, 140, 10])
+cam1_GREEN_LOWER = np.array([45, 170, 10])
 cam1_GREEN_UPPER = np.array([80, 255, 255])
 
-cam1_YELLOW_LOWER = np.array([15, 60, 80])
+cam1_YELLOW_LOWER = np.array([15, 200, 50])
 cam1_YELLOW_UPPER = np.array([45, 255, 255])
 
 
-cam2_RED_LOWER_0 = np.array([0, 150, 25])
+cam2_RED_LOWER_0 = np.array([0, 130, 100])
 cam2_RED_UPPER_0 = np.array([5, 255, 255])
-cam2_RED_LOWER_1 = np.array([165, 150, 25])
+cam2_RED_LOWER_1 = np.array([160, 130, 100])
 cam2_RED_UPPER_1 = np.array([180, 255, 255])
 
 cam2_GREEN_LOWER = np.array([60, 40, 10])
 cam2_GREEN_UPPER = np.array([100, 255, 255])
 
-cam2_YELLOW_LOWER = np.array([10, 70, 25])
+cam2_YELLOW_LOWER = np.array([10, 10, 25])
 cam2_YELLOW_UPPER = np.array([45, 255, 255])
 
 
@@ -47,11 +49,17 @@ def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, gree
     #read image
     if index == 1:
         v, img = cam1.read()
+        while (v == False):
+            v, img = cam1.read()
     if index == 2:
         v, img = cam2.read()
+        while (v == False):
+            v, img = cam2.read()
     
-    #if (index == 1):
-        #cv2.imwrite("test.jpg", img)
+    if (index == 1):
+        cv2.imwrite("test.jpg", img)
+    else:
+        cv2.imwrite("test3.jpg", img)
     
     #convert to hsv
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -76,8 +84,10 @@ def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, gree
     img[0:1,0:640] = 255
     img[0:480,639:640] = 255
     
-    #if (index == 1):
-        #cv2.imwrite('test2.jpg', img)
+    if (index == 1):
+        cv2.imwrite('test2.jpg', img)
+    else:
+        cv2.imwrite('test4.jpg', img)
     
     #apply contours
     blur = cv2.blur(img,(7,7))
@@ -94,11 +104,11 @@ def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, gree
     for c in contours:
         area = cv2.contourArea(c, False)
         if area > 20000:
-            print('color area requirement met')
+            #print('color area requirement met')
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.03*peri, True)
             if len(approx) == 4:
-                print('color 4 sides requirement met')
+                #print('color 4 sides requirement met')
                 #crop image within contour
                 M = cv2.moments(c)
                 centerX = int(M['m10']/M['m00'])
@@ -108,7 +118,7 @@ def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, gree
                 
                 #average color in cropped image
                 average = img.mean(axis=0).mean(axis=0)
-                print(average)
+                #print(average)
 
                 #colors
                 green = [0, 255, 0]
@@ -121,15 +131,18 @@ def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, gree
                 distances = np.sqrt(np.sum((colors-average)**2, axis=1))
                 idx = np.where(distances==np.amin(distances))
                 closest = colors[idx]
-                print(closest)
+                #print(closest)
                 if (closest == green).all():
-                    print(f"cam {index}: green")
+                    callInterrupt(threading.currentThread().getName() + "g\n")
+                    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
                 elif (closest == yellow).all():
-                    print(f"cam {index}: yellow")
+                    callInterrupt(threading.currentThread().getName() + "y\n")
+                    print("YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY")
                 elif (closest == red).all():
-                    print(f"cam {index}: red")
+                    callInterrupt(threading.currentThread().getName() + "r\n")
+                    print("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
                 elif (closest == white).all():
-                    print(f"cam {index}: nothing")
+                    pass
 
 
 #letters
@@ -137,11 +150,15 @@ def letterRec(index):
     #read image
     if index == 1:
         v, img = cam1.read()
+        while (v == False):
+            v, img = cam1.read()
     if index == 2:
         v, img = cam2.read()
-        
-    if (index == 1):
-        cv2.imwrite('test.jpg', img)
+        while (v == False):
+            v, img = cam2.read()
+    
+    #if (index == 1):
+        #cv2.imwrite('test.jpg', img)
     
     #color bounds
     BLACK_UPPER = 85
@@ -150,9 +167,8 @@ def letterRec(index):
     blur = cv2.blur(img,(7,7))
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, thresh = cv2.threshold(gray,BLACK_UPPER,255,cv2.THRESH_BINARY_INV)
-    
-    if (index == 1):
-        cv2.imwrite('test2.jpg', thresh)
+    #if (index == 1):
+        #cv2.imwrite('test2.jpg', thresh)
     
     #find contours
     contours, hierarchy = cv2.findContours(thresh, 
@@ -164,7 +180,7 @@ def letterRec(index):
         if x>0 and x+w1<640 and y>0 and y+h1<480:
             area = w1*h1
             if area > 15000:
-                print('letter area requirement met')
+                #print('letter area requirement met')
                 rect = cv2.minAreaRect(c)
                 cx, cy = rect[0]
                 w, h = rect[1]
@@ -172,35 +188,17 @@ def letterRec(index):
                 area = w*h
                 if 1 <= h/w <= 1.6 or 1 <= w/h <= 1.6:
                     #rotate image so letter is upright
-                    print('letter ratio requirement met')
+                    #print('letter ratio requirement met')
+                    #print(int(cy-h/2)-5, int(cy+h/2)+5, int(cx-w/2)-5, int(cx+w/2)+5)
+                    #print(int(cy-w/2)-5, int(cy+w/2)+5, int(cx-h/2)-5, int(cx+h/2)+5)
                     if w<h:
                         rot = cv2.getRotationMatrix2D((cx, cy), angle, 1)
                         thresh = cv2.warpAffine(thresh, rot, (640, 480))
-                        thresh = thresh[int(cy-h/2)-5: int(cy+h/2)+5, int(cx-w/2)-5: int(cx+w/2)+5]
+                        thresh = thresh[max(0, int(cy-h/2)-5): int(cy+h/2)+5, max(0, int(cx-w/2)-5): int(cx+w/2)+5]
                     else:
                         rot = cv2.getRotationMatrix2D((cx, cy), angle+90, 1)
                         thresh = cv2.warpAffine(thresh, rot, (640, 480))
-                        thresh = thresh[int(cy-w/2)-5: int(cy+w/2)+5, int(cx-h/2)-5: int(cx+h/2)+5]
-
-                    ud = cv2.rotate(thresh, cv2.ROTATE_180)
-                    
-                    inv_thresh = cv2.bitwise_not(thresh)
-                    inv_ud = cv2.bitwise_not(ud)
-                    
-                    if (index == 1):
-                        cv2.imwrite('test3.jpg', inv_thresh)
-                        cv2.imwrite('test4.jpg', inv_ud)
-                    
-                    target = pytesseract.image_to_string(inv_thresh, lang='eng', config='--psm 10 --oem 3 -c tessedit_char_whitelist=hHsSuU')[0]
-                    target2 = pytesseract.image_to_string(inv_ud, lang='eng', config='--psm 10 --oem 3 -c tessedit_char_whitelist=hHsSuU')[0]
-                    if (target == "H" or target2 == "H"):
-                        print(f"tesscam {index}: H")
-                    elif (target == "S" or target2 == "S"):
-                        print(f"tesscam {index}: S")
-                    elif (target == "U" or target2 == "U"):
-                        print(f"tesscam {index}: U")
-                    else:
-                        print(f"tesscam {index}: nothing")
+                        thresh = thresh[max(0, int(cy-w/2)-5): int(cy+w/2)+5, max(0, int(cx-h/2)-5): int(cx+h/2)+5]
                     
                     #divide image in half horizontally, in thirds vertically
                     rows, cols = thresh.shape
@@ -212,12 +210,12 @@ def letterRec(index):
                     mid_thresh = thresh[int(rows/3): int(2*rows/3), 0: cols]
                     bot_thresh = thresh[int(2*rows/3): rows, 0: cols]
 
-                    if (index == 1):
-                        cv2.imwrite('left.jpg', left_thresh)
-                        cv2.imwrite('right.jpg', right_thresh)
-                        cv2.imwrite('top.jpg', top_thresh)
-                        cv2.imwrite('mid.jpg', mid_thresh)
-                        cv2.imwrite('bot.jpg', bot_thresh)
+                    #if (index == 1):
+                        #cv2.imwrite('left.jpg', left_thresh)
+                        #cv2.imwrite('right.jpg', right_thresh)
+                        #cv2.imwrite('top.jpg', top_thresh)
+                        #cv2.imwrite('mid.jpg', mid_thresh)
+                        #cv2.imwrite('bot.jpg', bot_thresh)
                     
                     #find and count the number of contours in each section
                     contoursL, hierarchy = cv2.findContours(left_thresh,
@@ -266,18 +264,22 @@ def letterRec(index):
                     while min(B) < max(B)/4:
                         B.remove(min(B))
                     
-                    print(len(L), len(R), len(T), len(M), len(B))
+                    #print(len(L), len(R), len(T), len(M), len(B))
                     #return result
                     if len(L) == 2 and len(R) == 2:
-                        print(f"cam {index}: S")
+                        callInterrupt(threading.currentThread().getName() + "s\n")
+                        print("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS")
                     elif len(T) == 2 and len(M) == 2 and len(B) == 1:
-                        print(f"cam {index}: U")
+                        callInterrupt(threading.currentThread().getName() + "u\n")
+                        print("UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU")
                     elif len(T) == 1 and len(M) == 2 and len(B) == 2:
-                        print(f"cam {index}: U")
+                        callInterrupt(threading.currentThread().getName() + "u\n")
+                        print("UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU")
                     elif len(T) == 2 and len(M) == 1 and len(B) == 2:
-                        print(f"cam {index}: H")
+                        callInterrupt(threading.currentThread().getName() + "h\n")
+                        print("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
                     else:
-                        print(f"cam {index}: nothing")
+                        pass
 
 
 #run color recognition
@@ -285,7 +287,154 @@ def letterRec(index):
 #colorRec(2, cam2_RED_LOWER_0, cam2_RED_UPPER_0, cam2_RED_LOWER_1, cam2_RED_UPPER_1, cam2_GREEN_LOWER, cam2_GREEN_UPPER, cam2_YELLOW_LOWER, cam2_YELLOW_UPPER)
 
 #run letter recognition
-letterRec(1)
-letterRec(2)
+#letterRec(1)
+#letterRec(2)
 
-print("--- %s seconds ---" % (time.time() - start_time))
+def callInterrupt(data):
+    try:
+        ser.write(data.encode()) #encode the data so that it can be put through the serial connectoin
+        time.sleep(10) #wait 10 seconds
+    except:
+        print("ERROR")
+
+def camWrapper(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, greenUpper, yellowLower, yellowUpper):
+    while True:
+        colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, greenUpper, yellowLower, yellowUpper)
+        print(threading.currentThread().getName())
+
+def camWrapper2(index):
+    while True:
+        letterRec(index)
+        print(threading.currentThread().getName())
+
+if __name__ == '__main__':
+    try:
+        ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+    except:
+        print('failed to connect')
+        time.sleep(60)import time
+2
+import threading
+3
+import cv2
+4
+import numpy as np
+5
+import pytesseract
+6
+from PIL import Image
+7
+import RPi.GPIO as GPIO
+8
+import serial
+9
+import numpy as np
+10
+​
+11
+import subprocess
+12
+output = subprocess.run(['v4l2-ctl', '--list-devices'], stdout = subprocess.PIPE).stdout.decode('utf-8')
+13
+idxCam1 = int(output[output.index("USB 2.0 Camera")+62:output.index("USB 2.0 Camera")+63])
+14
+start_time = time.time()
+15
+​
+16
+#start cameras
+17
+cam1 = cv2.VideoCapture(idxCam1)
+18
+cam2 = cv2.VideoCapture(0)
+19
+​
+20
+#color HSV bounds
+21
+cam1_RED_LOWER_0 = np.array([0, 150, 10])
+22
+cam1_RED_UPPER_0 = np.array([5, 255, 255])
+23
+cam1_RED_LOWER_1 = np.array([165, 150, 10])
+24
+cam1_RED_UPPER_1 = np.array([180, 255, 255])
+25
+​
+26
+cam1_GREEN_LOWER = np.array([50, 140, 10])
+27
+cam1_GREEN_UPPER = np.array([80, 255, 255])
+28
+​
+29
+cam1_YELLOW_LOWER = np.array([15, 60, 80])
+30
+cam1_YELLOW_UPPER = np.array([45, 255, 255])
+31
+​
+32
+​
+33
+cam2_RED_LOWER_0 = np.array([0, 150, 25])
+34
+cam2_RED_UPPER_0 = np.array([5, 255, 255])
+35
+cam2_RED_LOWER_1 = np.array([165, 150, 25])
+36
+cam2_RED_UPPER_1 = np.array([180, 255, 255])
+37
+​
+38
+cam2_GREEN_LOWER = np.array([60, 40, 10])
+39
+cam2_GREEN_UPPER = np.array([100, 255, 255])
+40
+​
+41
+cam2_YELLOW_LOWER = np.array([10, 70, 25])
+42
+cam2_YELLOW_UPPER = np.array([45, 255, 255])
+43
+​
+44
+​
+45
+#colors
+46
+def colorRec(index, redLower0, redUpper0, redLower1, redUpper1, greenLower, greenUpper, yellowLower, yellowUpper):
+47
+    #read image
+48
+    if index == 1:
+49
+        v, img = cam1.read()
+50
+    if index == 2:
+51
+        v, img = cam2.read()
+52
+    
+53
+    #if (index == 1):
+    finally:
+        ser.write('start\n'.encode())
+
+    t1 = threading.Thread(target = camWrapper, args = (1, cam1_RED_LOWER_0, cam1_RED_UPPER_0, cam1_RED_LOWER_1, cam1_RED_UPPER_1, cam1_GREEN_LOWER, cam1_GREEN_UPPER, cam1_YELLOW_LOWER, cam1_YELLOW_UPPER), name = "1")
+    t2 = threading.Thread(target = camWrapper, args = (2, cam2_RED_LOWER_0, cam2_RED_UPPER_0, cam2_RED_LOWER_1, cam2_RED_UPPER_1, cam2_GREEN_LOWER, cam2_GREEN_UPPER, cam2_YELLOW_LOWER, cam2_YELLOW_UPPER), name = "2")
+    t3 = threading.Thread(target = camWrapper2, args = [1], name = "3")
+    t4 = threading.Thread(target = camWrapper2, args = [2], name = "4")
+    
+    t1.start()
+    t2.start()
+    t3.start()
+    t4.start()
+    while True: #make the main thread sleep
+        time.sleep(60)
+
+
+cam1.release()
+cam2.release()
+
+#print("--- %s seconds ---" % (time.time() - start_time))
+
